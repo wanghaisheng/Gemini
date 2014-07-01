@@ -1,0 +1,21 @@
+# Windows:
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Python:
+*.py[cod]
+*.so
+*.egg
+*.egg-info
+dist
+build
+pttest_*.py
+
+# emacs
+*.~[0123456789]~
+*.~[0123456789][0123456789]~
+*.~[0123456789][0123456789][0123456789]~
+
+# pycharm
+.idea
