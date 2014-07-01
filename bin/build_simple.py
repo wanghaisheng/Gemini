@@ -41,8 +41,8 @@ def build_flann_index(feature_file, tid_file):
 
     with Timer() as t:
         flann = FLANN()
-        params = flann.build_index(feature_data, target_precision=0.95, build_weight=0.01,
-                                   memory_weight=0.01, sample_fraction=0.2)
+        params = flann.build_index(feature_data, algorithm='autotuned', target_precision=0.9, build_weight=0.01,
+                                   memory_weight=0.01, sample_fraction=0.1)
     logger.info("[%s] build index by flann. returned paras are : %s " % (t.elapsed, params))
 
     return flann
@@ -65,17 +65,20 @@ def parse_args():
     parser.add_argument("--distance", metavar='DISTANCE', type=float, help="同款的距离阈值， 欧式距离的平方.")
     parser.add_argument("--output", metavar='OUTPUT', help="输出文件夹.")
     args = parser.parse_args()
-    if not os.path.exists(args.feature):
+    if args.feature is None or not os.path.exists(args.feature):
         print "feature file do not exist"
         parser.print_help()
-    if not os.path.exists(args.tid):
+        sys.exit(1)
+    if args.tid is None or not os.path.exists(args.tid):
         print "feature file do not exist"
         parser.print_help()
-    if not os.path.exists(args.output):
-        os.mkdir(args.output)
+        sys.exit(1)        
     if args.distance is None:
         print "distance is not specified "
         parser.print_help()
+        sys.exit(1)
+    if args.output is None or not os.path.exists(args.output):
+        os.mkdir(args.output)
 
     return args
 
