@@ -17,6 +17,7 @@ import os
 import numpy as np
 from pyflann import FLANN
 
+
 class Index():
 
     def __init__(self):
