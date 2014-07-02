@@ -17,6 +17,7 @@ from time import time
 from argparse import ArgumentParser
 import logging
 import cPickle
+import json
 
 from contexttimer import Timer
 import numpy as np
@@ -29,22 +30,32 @@ from utils import setup_logger, try_load_npy, flat2list
 LOG_LEVEL = logging.DEBUG
 LOG_FILE = 'build_simple.log'
 
-logger = setup_logger('WEK', LOG_FILE, LOG_LEVEL)
+logger = None
 
 
-def build_flann_index(feature_file, tid_file):
+def build_flann_index(feature_file, index_file, para_file, force=False):
     """
-
+    尝试加载索引文件，如果不存在，就根据feature文件进行build。
     """
     with Timer() as t:
         feature_data = try_load_npy(feature_file)
     logger.info("[%s] load feature data %s " % (t.elapsed, feature_file))
 
-    with Timer() as t:
-        flann = FLANN()
-        params = flann.build_index(feature_data, algorithm='autotuned', target_precision=0.9, build_weight=0.01,
-                                   memory_weight=0.01, sample_fraction=0.1)
-    logger.info("[%s] build index by flann. returned paras are : %s " % (t.elapsed, params))
+    
+    flann = FLANN()
+    if os.path.exists(index_file) and not force:
+        with Timer() as t:
+            flann.load_index(index_file, feature_data)
+            params = json.load(open(para_file))
+        logger.info("[%s] load index file %s and para file %s" % (t.elapsed, index_file, para_file) )
+    else:
+        with Timer() as t:
+            params = flann.build_index(feature_data, algorithm='autotuned', target_precision=0.9, build_weight=0.01,
+                                       memory_weight=0.01, sample_fraction=0.1)
+            json.dump(params, open(para_file, 'w'))
+            flann.save_index(index_file)
+        logger.info("[%s] build index by flann. returned paras are : %s " % (t.elapsed, params))
+
 
     return flann, params, feature_data
 
@@ -52,7 +63,7 @@ def build_group_1nn_simple(flann, feature_data, params, threshold):
     """ 最简单的近邻聚类方法： 只要tid的最近邻N（tid）在某同款组，则加入该组。"""
 
     with Timer() as t:
-        neighbors, distances = flann.nn_index(feature_data, num_neighbors=1, **params)
+        neighbors, distances = flann.nn_index(feature_data, num_neighbors=2, **params)
     logger.info("[%s] query all points with nearest neighbors" % t.elapsed)
 
 
@@ -66,10 +77,15 @@ def build_group_1nn_simple(flann, feature_data, params, threshold):
             logger.debug("  %s points has been processed " % i)
 
         # 阈值之内才算neighbour， 返回数据按照距离排序
+        current_neighbor = neighbors[i][0]
         current_distance = distances[i][0]
+        if current_neighbor == i: # 自身不算最近邻, 找次近邻
+            current_neighbor = neighbors[i][1]
+            current_distance = distances[i][1]
+            
         if current_distance >= threshold:
             continue
-        current_neighbor = neighbors[i][0]
+
         groupid = pos2groupid.get(current_neighbor)
         if groupid is not None:
             pos2groupid[i] = groupid
@@ -87,13 +103,19 @@ def build_group_1nn_simple(flann, feature_data, params, threshold):
 def main(args):
     """
     """
-    flann, params, feature_data = build_flann_index(args.feature, args.tid)
-    index_file = args.output + '/feature_index'
-    flann.save_index(index_file)
-    pos2groupid, groupid2pos = build_group_1nn_simple(flann, feature_data, params, args.distance)
+    global logger
+    logger = setup_logger('SPL', args.output+'/'+LOG_FILE, LOG_LEVEL)
 
+    index_file = args.output + '/feature_index'
+    index_para_file = args.output + '/feature_index_para'
     group_file = args.output + '/group_pickle'
-    cPickle.dump((pos2groupid, groupid2pos), group_file, protocol=2)
+
+    flann, params, feature_data = build_flann_index(args.feature, index_file, index_para_file, force=args.force)
+
+        
+    if args.force or not os.path.exists(group_file):
+        pos2groupid, groupid2pos = build_group_1nn_simple(flann, feature_data, params, args.distance)
+        cPickle.dump((pos2groupid, groupid2pos), open(group_file,'w'), protocol=2)
 
 
 def parse_args():
@@ -104,6 +126,7 @@ def parse_args():
     parser.add_argument("--tid", metavar='TID', help="tid文件路径.")
     parser.add_argument("--distance", metavar='DISTANCE', type=float, help="同款的距离阈值， 欧式距离的平方.")
     parser.add_argument("--output", metavar='OUTPUT', help="输出文件夹.")
+    parser.add_argument("--force", action='store_true', help="删除已有的索引文件.")
     args = parser.parse_args()
     if args.feature is None or not os.path.exists(args.feature):
         print "feature file do not exist"
