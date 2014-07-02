@@ -15,6 +15,27 @@ import logging
 
 import numpy as np
 
+def np_iter_loadtxt(filename, delimiter=" ", skiprows=0, dtype=float):
+    """
+     np.genfromtxt很耗内存， 68.9w数据不能执行。
+     np.loadtxt略好， 占用接近80%的内存后完成load
+     这里是一个更高效的实现。
+     http://stackoverflow.com/questions/8956832/python-out-of-memory-on-large-csv-file-numpy
+    """
+    def iter_func():
+        with open(filename, 'r') as infile:
+            for _ in range(skiprows):
+                next(infile)
+            for line in infile:
+                line = line.rstrip().split(delimiter)
+                for item in line:
+                    yield dtype(item)
+        np_iter_loadtxt.rowlength = len(line)
+
+    data = np.fromiter(iter_func(), dtype=dtype)
+    data = data.reshape((-1, np_iter_loadtxt.rowlength))
+    return data
+
 
 
 def try_load_npy(fn):
@@ -25,7 +46,8 @@ def try_load_npy(fn):
     elif os.path.exists(fn+'.npy'):
         ret = np.load(fn+'.npy')
     else:
-        ret = np.genfromtxt(fn)
+        # ret = np.genfromtxt(fn)
+        ret = np_iter_loadtxt(fn)
         np.save(fn+'.npy', ret)
     return ret
 

@@ -16,13 +16,14 @@ import datetime
 from time import time
 from argparse import ArgumentParser
 import logging
+import cPickle
 
 from contexttimer import Timer
 import numpy as np
 from pyflann import FLANN
 
 
-from utils import setup_logger, try_load_npy
+from utils import setup_logger, try_load_npy, flat2list
 
 
 LOG_LEVEL = logging.DEBUG
@@ -45,15 +46,54 @@ def build_flann_index(feature_file, tid_file):
                                    memory_weight=0.01, sample_fraction=0.1)
     logger.info("[%s] build index by flann. returned paras are : %s " % (t.elapsed, params))
 
-    return flann
+    return flann, params, feature_data
+
+def build_group_1nn_simple(flann, feature_data, params, threshold):
+    """ 最简单的近邻聚类方法： 只要tid的最近邻N（tid）在某同款组，则加入该组。"""
+
+    with Timer() as t:
+        neighbors, distances = flann.nn_index(feature_data, num_neighbors=1, **params)
+    logger.info("[%s] query all points with nearest neighbors" % t.elapsed)
+
+
+    # twitter用feature data中的pos表示
+    pos2groupid = {}   # {10:5, 20:5}
+    groupid2pos = {}   # {5:set(5, 10, 20)}
+    n = len(neighbors)
+    logger.info("start to cluster %s points into groups" % n)
+    for i in xrange(n):
+        if i % 1000 == 0:
+            logger.debug("  %s points has been processed " % i)
+
+        # 阈值之内才算neighbour， 返回数据按照距离排序
+        current_distance = distances[i][0]
+        if current_distance >= threshold:
+            continue
+        current_neighbor = neighbors[i][0]
+        groupid = pos2groupid.get(current_neighbor)
+        if groupid is not None:
+            pos2groupid[i] = groupid
+            groupid2pos[groupid].add(i)
+        else:
+            groupid2pos[i] = set((i, current_neighbor))
+            pos2groupid[i] = i
+            pos2groupid[current_neighbor] = i
+
+    logger.info("clustering points into group is done")
+
+    return pos2groupid, groupid2pos
 
 
 def main(args):
     """
     """
-    flann = build_flann_index(args.feature, args.tid)
+    flann, params, feature_data = build_flann_index(args.feature, args.tid)
     index_file = args.output + '/feature_index'
     flann.save_index(index_file)
+    pos2groupid, groupid2pos = build_group_1nn_simple(flann, feature_data, params, args.distance)
+
+    group_file = args.output + '/group_pickle'
+    cPickle.dump((pos2groupid, groupid2pos), group_file, protocol=2)
 
 
 def parse_args():
