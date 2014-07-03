@@ -22,6 +22,7 @@ import json
 from contexttimer import Timer
 import numpy as np
 from pyflann import FLANN
+import scipy.spatial
 
 
 from utils import setup_logger, try_load_npy, flat2list
@@ -30,7 +31,7 @@ from utils import setup_logger, try_load_npy, flat2list
 LOG_LEVEL = logging.DEBUG
 LOG_FILE = 'build_simple.log'
 # 不同group的聚类算法
-CLUSTERING_ALGORITHMS = ['1nn', '1nn_order', '2nn']
+CLUSTERING_ALGORITHMS = ['1nn', '1nn_order', '1nn_2step', '2nn']
 
 logger = None
 
@@ -173,19 +174,24 @@ def _split_group(points, feature_data, threshold):
     idx_list = range(dim1)
 
     # i和j各自近邻，按照距离排序，不包括自身。
-    i_nns = sorted(idx_list[:i]+idx_list[i+1:], key=lambda x: cdist[x])
-    j_nns = sorted(idx_list[:j]+idx_list[j+1:], key=lambda x: cdist[x])
+    i_nns = sorted(idx_list[:i]+idx_list[i+1:], key=lambda x: cdist[i, x])
+    j_nns = sorted(idx_list[:j]+idx_list[j+1:], key=lambda x: cdist[j, x])
 
     i_group = [i]
     j_group = [j]
     while i_nns or j_nns:
-        while i_nns[0] in i_group or i_nns[0] in j_group:
+        while i_nns and (i_nns[0] in i_group or i_nns[0] in j_group):
             i_nns.pop(0)
-        while j_nns[0] in i_group or j_nns[0] in j_group:
+        while j_nns and (j_nns[0] in i_group or j_nns[0] in j_group):
             j_nns.pop(0)
-        if cdist[i, i_nns[0]] <= cdist[j, j_nns[0]]:
+        if i_nns and j_nns:
+            if cdist[i, i_nns[0]] <= cdist[j, j_nns[0]]:
+                i_group.append(i_nns.pop(0))
+            else:
+                j_group.append(j_nns.pop(0))
+        elif i_nns:
             i_group.append(i_nns.pop(0))
-        else:
+        elif j_nns:
             j_group.append(j_nns.pop(0))
 
     i_point_group = map(lambda x: points[x], i_group)
@@ -206,11 +212,10 @@ def build_group_1nn_2step(flann, feature_data, params, threshold):
     logger.info("[%s] query all %s points with nearest neighbors " % (t.elapsed, len(feature_data)))
 
     order_positions, order_neighbors, order_distances = _find_and_sort_neighbor(neighbors, distances, threshold)
-
     n = len(order_positions)
-    logger.info(" % points with neighbors in the threshold are sorted" % n)
+    logger.info(" %s points with neighbors in the threshold are sorted" % n)
+    
     logger.info("start to cluster %s points into groups" % n)
-
     # 第一步： 尽量聚类
     # twitter用feature data中的pos表示
     pos2groupid = {}   # {10:5, 20:5}

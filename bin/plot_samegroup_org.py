@@ -33,6 +33,7 @@ def parse_args():
     parser.add_argument("--num", type=int, default=2, help="the minimum group size. default 2.")
     parser.add_argument("--url", help="the file for twitter id and urls.")
     parser.add_argument("--feature", help="feature file for drawing distance matrix.")
+    parser.add_argument("--ids", help="少量twitter的id信息，只展现这些id的信息. 1,3,5")
     args = parser.parse_args()
     return args
 
@@ -55,7 +56,13 @@ def main(args):
         feature_data = try_load_npy(args.feature)
         group.set_feature(feature_data)
 
-    ids = group.get_group_list()
+    if args.ids is None:
+        ids = group.get_group_list()
+    else:
+        twitters = map(int, args.ids.split(','))
+        ids = []
+        for t in twitters:
+            ids.append(group.get_group(t))
 
     large_groups = []
     for pos in ids:
@@ -82,7 +89,7 @@ def main(args):
 
         fh = open(temp_file, 'w')
         for s in large_groups:
-
+            s = list(s)
             positions = map(lambda x: "%s" % x, s)
             urls = map(lambda x: "[[%s]]" % group.get_url(x), s)
             print >> fh, "| %s |" % " | ".join(positions)
