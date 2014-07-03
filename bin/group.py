@@ -15,7 +15,7 @@ import sys
 import os
 import cPickle
 
-from utils import flat2dict, flat2dict_ext，flat2list
+from utils import flat2dict, flat2dict_ext, flat2list
 
 class Group():
     """
@@ -45,7 +45,7 @@ class Group():
         """
         读取 twitter， 更新时间和image url的数据
         """
-        self._tid_and_url = flat2list(fn)
+        self._tid_and_url = flat2list(fn, sep=' ')
 
     def tid_num(self):
         if self._tid_and_url:

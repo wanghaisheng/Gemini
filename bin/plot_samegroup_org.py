@@ -54,14 +54,15 @@ def main(args):
 
     large_groups = []
     for pos in ids:
-        members = group.get_group(pos)
+        members = group.get_member(pos)
         n = len(members)
         dist_group_size[n] += 1
         if len(members) < args.num:
             continue
         large_groups.append(members)
 
-    for k in dist_group_size.keys().sort():
+    bins = dist_group_size.keys()
+    for k in bins:
         if count_total:
             print "size %s = %s\t\t[%s]" % (k, dist_group_size[k], dist_group_size[k] / float(count_total))
         else:
@@ -70,13 +71,13 @@ def main(args):
     if args.url is not None:
         output_file = args.output
         if output_file.endswith('.html') or output_file.endswith('.htm'):
-            temp_file = os.path.basename(output_file) + '.org'
+            temp_file = output_file.rsplit('.', 1)[0] + '.org'
         else:
             temp_file = output_file + '.org'
 
         fh = open(temp_file, 'w')
         for s in large_groups:
-            urls = map(lambda x: "[[ %s ]]" % group.get_url(x), s)
+            urls = map(lambda x: "[[%s]]" % group.get_url(x), s)
             print >> fh, "| %s |" % " | ".join(urls)
             print >> fh
         fh.close()
