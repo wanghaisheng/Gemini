@@ -67,10 +67,10 @@ def build_group(flann, feature_data, params, threshold, algorithm='1nn'):
         return build_group_1nn_simple(flann, feature_data, params, threshold)
     elif algorithm == '1nn_order':
         return build_group_1nn_order(flann, feature_data, params, threshold)
+    elif algorithm == '1nn_2step':
+        return build_group_1nn_2step(flann, feature_data, params, threshold)
     elif algorithm == '2nn':
         pass
-
-
 
 def build_group_2nn_simple(flann, feature_data, params, threshold):
     """ 考察两个近邻。按照最近邻的距离排序，依次处理。
@@ -151,6 +151,98 @@ def _find_and_sort_neighbor(neighbors, distances, threshold):
 
     return order_positions, order_neighbors, order_distances
 
+def _split_group(points, feature_data, threshold):
+    """
+    如果同款组内元素最大距离超过阈值，则对同款组进行分裂。
+    以最大距离两个元素为种子： 将最近邻依次加入。
+
+    递归处理剩余元素。
+    """
+    points = list(points)
+    vector = feature_data[points]
+    cdist = scipy.spatial.distance.cdist(vector, vector)
+    max_value = cdist.max()
+    if max_value < threshold:
+        return [points]
+
+    # 最大元素坐标为[i, j]
+    idx = cdist.argmax()
+    dim1, dim2 = cdist.shape  # dim1 == dim2
+    i = idx/dim2
+    j = idx % dim2
+    idx_list = range(dim1)
+
+    # i和j各自近邻，按照距离排序，不包括自身。
+    i_nns = sorted(idx_list[:i]+idx_list[i+1:], key=lambda x: cdist[x])
+    j_nns = sorted(idx_list[:j]+idx_list[j+1:], key=lambda x: cdist[x])
+
+    i_group = [i]
+    j_group = [j]
+    while i_nns or j_nns:
+        while i_nns[0] in i_group or i_nns[0] in j_group:
+            i_nns.pop(0)
+        while j_nns[0] in i_group or j_nns[0] in j_group:
+            j_nns.pop(0)
+        if cdist[i, i_nns[0]] <= cdist[j, j_nns[0]]:
+            i_group.append(i_nns.pop(0))
+        else:
+            j_group.append(j_nns.pop(0))
+
+    i_point_group = map(lambda x: points[x], i_group)
+    j_point_group = map(lambda x: points[x], j_group)
+
+    return _split_group(i_point_group, feature_data, threshold) + _split_group(j_point_group, feature_data, threshold)
+
+
+def build_group_1nn_2step(flann, feature_data, params, threshold):
+    """
+    两步处理：
+    1. 按照阈值，尽量聚类。
+    2. 数量超过2同款组，对类别进行分裂。
+    """
+
+    with Timer() as t:
+        neighbors, distances = flann.nn_index(feature_data, num_neighbors=2, **params)
+    logger.info("[%s] query all %s points with nearest neighbors " % (t.elapsed, len(feature_data)))
+
+    order_positions, order_neighbors, order_distances = _find_and_sort_neighbor(neighbors, distances, threshold)
+
+    n = len(order_positions)
+    logger.info(" % points with neighbors in the threshold are sorted" % n)
+    logger.info("start to cluster %s points into groups" % n)
+
+    # 第一步： 尽量聚类
+    # twitter用feature data中的pos表示
+    pos2groupid = {}   # {10:5, 20:5}
+    groupid2pos = {}   # {5:set(5, 10, 20)}
+    for i in xrange(n):
+        if i % 10000 == 0:
+            logger.debug("  %s points has been processed " % i)
+        point = order_positions[i]
+        nn = order_neighbors[i][0]
+        groupid = pos2groupid.get(nn)
+        if groupid is not None:
+            pos2groupid[point] = groupid
+            groupid2pos[groupid].add(point)
+        else:
+            groupid2pos[point] = set((point, nn))
+            pos2groupid[nn] = point
+            pos2groupid[point] = point
+
+    # 第二部： 按照阈值split
+    for k in groupid2pos.keys():
+        v = list(groupid2pos[k])
+        if len(v) > 2:
+            del groupid2pos[k]
+            vs = _split_group(v, feature_data, threshold)
+            for v in vs:
+                idx = min(v)
+                groupid2pos[idx] = set(v)
+                for k in v:
+                    pos2groupid[k] = idx
+    logger.info("clustering points into group is done")
+
+    return pos2groupid, groupid2pos
 
 def build_group_1nn_order(flann, feature_data, params, threshold):
     """
