@@ -71,26 +71,42 @@ def build_group(flann, feature_data, params, threshold, algorithm='1nn'):
     elif algorithm == '1nn_2step':
         return build_group_1nn_2step(flann, feature_data, params, threshold)
     elif algorithm == '2nn':
-        pass
+        return build_group_2nn_simple(flann, feature_data, params, threshold)
+
+def _is_insert_current_group(group, point, feature_data, threshold):
+    """
+    如果将point插入当前group，满足所有点阈值小于threshold，返回Yes， 否则No
+    """
+    vec1 = feature_data[[point]]
+    vec2 = feature_data[list(group)]
+    mat = scipy.spatial.distance.cdist(vec1, vec2)
+    if max.max < threshold:
+        return True
+    else:
+        return False
+
 
 def build_group_2nn_simple(flann, feature_data, params, threshold):
-    """ 考察两个近邻。按照最近邻的距离排序，依次处理。
-    1. 如果两个近邻属于一个分组, 加入该组。
-    2. 如果两个近邻分别属于不同组：
-        1. 最近邻所在组元素少于次近邻，加入最近邻组。
-        2. 最近邻所在组元素大于次近邻。独立为一组。
+    """ 考察n个近邻。不同点按照最近邻的距离排序，依次处理。
+    1. 如果最近邻属于一个分组, 且与分组中所有元素距离小于阈值，则加入该组。
+    2. 依次考虑第n个近邻。
+
+    TODO：
+    1. 算法可能有风险： 考虑当前元素的第n个次近邻时，其距离可能接近阈值。把后续距离更近的pair（潜在同款组打破）。 把所有的近邻关系全局排序，可能是最优的。
+    2. 另外一个思路，是考虑n个近邻中，隶属元素最多的同款组。
+
     """
 
     with Timer() as t:
-        neighbors, distances = flann.nn_index(feature_data, num_neighbors=3, **params)
+        neighbors, distances = flann.nn_index(feature_data, num_neighbors=10, **params)
     logger.info("[%s] query all %s points with nearest neighbors " % (t.elapsed, len(feature_data)))
 
     order_positions, order_neighbors, order_distances = _find_and_sort_neighbor(neighbors, distances, threshold)
 
     n = len(order_positions)
     logger.info(" % points with neighbors in the threshold are sorted" % n)
-    logger.info("start to cluster %s points into groups" % n)
 
+    logger.info("start to cluster %s points into groups" % n)
     # twitter用feature data中的pos表示
     pos2groupid = {}   # {10:5, 20:5}
     groupid2pos = {}   # {5:set(5, 10, 20)}
@@ -98,18 +114,34 @@ def build_group_2nn_simple(flann, feature_data, params, threshold):
         if i % 10000 == 0:
             logger.debug("  %s points has been processed " % i)
         point = order_positions[i]
+
+        # point已经被其他最近邻纳入某个同款组。 风险：当前最近邻不能发挥作用。
+        if point in pos2groupid:
+            continue
         members = order_neighbors[i]
         n = len(members)
-        if n == 1:
-            nn = members[0]
+        checked_group = []
+        is_grouped = False
+        i = 0
+        while not is_grouped and i < n :
+            nn = members[i]
+            i += 1
             groupid = pos2groupid.get(nn)
             if groupid is not None:
-                pos2groupid[point] = groupid
-                groupid2pos[groupid].add(point)
+                if groupid not in checked_group:
+                    cur_group = groupid2pos[groupid]
+                    if _is_insert_current_group(cur_group, point, feature_data, threshold ):
+                        cur_group.add(point)
+                        pos2groupid[point] = groupid
+                        is_grouped = True
+                    checked_group.append(groupid)
+                else:
+                    pass # 当前近邻所属同款组，在其他近邻所属同款组时已经检查过了。
             else:
                 groupid2pos[point] = set((point, nn))
                 pos2groupid[nn] = point
                 pos2groupid[point] = point
+                is_grouped = True
 
     logger.info("clustering points into group is done")
 
@@ -119,7 +151,6 @@ def build_group_2nn_simple(flann, feature_data, params, threshold):
 def _find_and_sort_neighbor(neighbors, distances, threshold):
     """
      从nn_index产出的数据中，产生近邻， 按照最近邻距离排序。
-
     """
     n = len(neighbors)
     threshold_pair = []
