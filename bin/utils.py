@@ -14,6 +14,12 @@ import os
 import logging
 
 import numpy as np
+import scipy.spatial
+
+def distance_matrix(points, feature_data):
+    vector = feature_data[points]
+    return scipy.spatial.distance.cdist(vector, vector)
+
 
 def np_iter_loadtxt(filename, delimiter=" ", skiprows=0, dtype=float):
     """

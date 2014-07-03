@@ -77,45 +77,43 @@ def build_group_2nn_simple(flann, feature_data, params, threshold):
     1. 如果两个近邻属于一个分组, 加入该组。
     2. 如果两个近邻分别属于不同组：
         1. 最近邻所在组元素少于次近邻，加入最近邻组。
-        2. 最近邻所在组元素大于次近邻。TODO
-        """
+        2. 最近邻所在组元素大于次近邻。独立为一组。
+    """
 
     with Timer() as t:
-        neighbors, distances = flann.nn_index(feature_data, num_neighbors=2, **params)
-    logger.info("[%s] query all points with nearest neighbors" % t.elapsed)
+        neighbors, distances = flann.nn_index(feature_data, num_neighbors=3, **params)
+    logger.info("[%s] query all %s points with nearest neighbors " % (t.elapsed, len(feature_data)))
 
+    order_positions, order_neighbors, order_distances = _find_and_sort_neighbor(neighbors, distances, threshold)
+
+    n = len(order_positions)
+    logger.info(" % points with neighbors in the threshold are sorted" % n)
+    logger.info("start to cluster %s points into groups" % n)
 
     # twitter用feature data中的pos表示
     pos2groupid = {}   # {10:5, 20:5}
     groupid2pos = {}   # {5:set(5, 10, 20)}
-    n = len(neighbors)
-    logger.info("start to cluster %s points into groups" % n)
     for i in xrange(n):
-        if i % 1000 == 0:
+        if i % 10000 == 0:
             logger.debug("  %s points has been processed " % i)
-
-        # 阈值之内才算neighbour， 返回数据按照距离排序
-        current_neighbor = neighbors[i][0]
-        current_distance = distances[i][0]
-        if current_neighbor == i: # 自身不算最近邻, 找次近邻
-            current_neighbor = neighbors[i][1]
-            current_distance = distances[i][1]
-
-        if current_distance >= threshold:
-            continue
-
-        groupid = pos2groupid.get(current_neighbor)
-        if groupid is not None:
-            pos2groupid[i] = groupid
-            groupid2pos[groupid].add(i)
-        else:
-            groupid2pos[i] = set((i, current_neighbor))
-            pos2groupid[i] = i
-            pos2groupid[current_neighbor] = i
+        point = order_positions[i]
+        members = order_neighbors[i]
+        n = len(members)
+        if n == 1:
+            nn = members[0]
+            groupid = pos2groupid.get(nn)
+            if groupid is not None:
+                pos2groupid[point] = groupid
+                groupid2pos[groupid].add(point)
+            else:
+                groupid2pos[point] = set((point, nn))
+                pos2groupid[nn] = point
+                pos2groupid[point] = point
 
     logger.info("clustering points into group is done")
 
     return pos2groupid, groupid2pos
+
 
 def _find_and_sort_neighbor(neighbors, distances, threshold):
     """

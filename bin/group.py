@@ -15,6 +15,8 @@ import sys
 import os
 import cPickle
 
+import scipy.spatial
+
 from utils import flat2dict, flat2dict_ext, flat2list
 
 class Group():
@@ -105,6 +107,10 @@ class Group():
             return self._tid_and_url[pos][-1]
         else:
             return None
+
+    def get_distance_matrix(self, points):
+        vector = self._feature_data[points]
+        return scipy.spatial.distance.cdist(vector, vector)
 
     def insert(self, group_id, neighbor, feature=None):
 

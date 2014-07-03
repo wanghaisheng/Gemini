@@ -19,6 +19,7 @@ from collections import Counter
 import time
 
 from group import Group
+from utils import try_load_npy, distance_matrix
 
 
 #----------------------------------------------------------------------
@@ -31,6 +32,7 @@ def parse_args():
     parser.add_argument("output", metavar='OUTPUT', help="the output html file.")
     parser.add_argument("--num", type=int, default=2, help="the minimum group size. default 2.")
     parser.add_argument("--url", help="the file for twitter id and urls.")
+    parser.add_argument("--feature", help="feature file for drawing distance matrix.")
     args = parser.parse_args()
     return args
 
@@ -49,6 +51,9 @@ def main(args):
     if args.url is not None:
         group.load_tid(args.url)
         count_total = group.tid_num()
+    if args.feature is not None:
+        feature_data = try_load_npy(args.feature)
+        group.set_feature(feature_data)
 
     ids = group.get_group_list()
 
@@ -77,9 +82,17 @@ def main(args):
 
         fh = open(temp_file, 'w')
         for s in large_groups:
+
             positions = map(lambda x: "%s" % x, s)
             urls = map(lambda x: "[[%s]]" % group.get_url(x), s)
             print >> fh, "| %s |" % " | ".join(positions)
+            if args.feature is not None:
+                n = len(s)
+                matrix = group.get_distance_matrix(s)
+                for i in range(n):
+                    v = matrix[i]
+                    print >> fh, "| %s |" % " | ".join(map(str, v))
+
             print >> fh, "| %s |" % " | ".join(urls)
             print >> fh
         fh.close()
