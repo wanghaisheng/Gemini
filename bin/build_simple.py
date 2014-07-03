@@ -30,7 +30,7 @@ from utils import setup_logger, try_load_npy, flat2list
 LOG_LEVEL = logging.DEBUG
 LOG_FILE = 'build_simple.log'
 # 不同group的聚类算法
-CLUSTERING_ALGORITHM = ['1nn', '1nn_order', '2nn']
+CLUSTERING_ALGORITHMS = ['1nn', '1nn_order', '2nn']
 
 logger = None
 
@@ -247,7 +247,7 @@ def main(args):
 
         
     if args.force or not os.path.exists(group_file):
-        pos2groupid, groupid2pos = build_group_1nn_simple(flann, feature_data, params, args.distance)
+        pos2groupid, groupid2pos = build_group(flann, feature_data, params, args.distance, args.algorithm)
         cPickle.dump((pos2groupid, groupid2pos), open(group_file,'w'), protocol=2)
 
 
@@ -276,7 +276,7 @@ def parse_args():
         sys.exit(1)
     if args.output is None or not os.path.exists(args.output):
         os.mkdir(args.output)
-    if args.algorithm is not in CLUSTERING_ALGORITHMs:
+    if args.algorithm not in CLUSTERING_ALGORITHMS:
         print "未知聚类算法 %s。 合法算法包括%s" % (args.algorithm, CLUSTERING_ALGORITHM)
         parser.print_help()
         sys.exit(1)
