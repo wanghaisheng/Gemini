@@ -31,7 +31,7 @@ from utils import setup_logger, try_load_npy, flat2list
 LOG_LEVEL = logging.DEBUG
 LOG_FILE = 'build_simple.log'
 # 不同group的聚类算法
-CLUSTERING_ALGORITHMS = ['1nn', '1nn_order', '1nn_2step', '2nn']
+CLUSTERING_ALGORITHMS = ['1nn', '1nn_order', '1nn_2step', 'xnn_simple']
 
 logger = None
 
@@ -70,8 +70,8 @@ def build_group(flann, feature_data, params, threshold, algorithm='1nn'):
         return build_group_1nn_order(flann, feature_data, params, threshold)
     elif algorithm == '1nn_2step':
         return build_group_1nn_2step(flann, feature_data, params, threshold)
-    elif algorithm == '2nn':
-        return build_group_2nn_simple(flann, feature_data, params, threshold)
+    elif algorithm == 'xnn_simple':
+        return build_group_xnn_simple(flann, feature_data, params, threshold)
 
 def _is_insert_current_group(group, point, feature_data, threshold):
     """
@@ -79,14 +79,14 @@ def _is_insert_current_group(group, point, feature_data, threshold):
     """
     vec1 = feature_data[[point]]
     vec2 = feature_data[list(group)]
-    mat = scipy.spatial.distance.cdist(vec1, vec2)
-    if max.max < threshold:
+    mat = scipy.spatial.distance.cdist(vec1, vec2, 'sqeuclidean')
+    if mat.max() < threshold:
         return True
     else:
         return False
 
 
-def build_group_2nn_simple(flann, feature_data, params, threshold):
+def build_group_xnn_simple(flann, feature_data, params, threshold):
     """ 考察n个近邻。不同点按照最近邻的距离排序，依次处理。
     1. 如果最近邻属于一个分组, 且与分组中所有元素距离小于阈值，则加入该组。
     2. 依次考虑第n个近邻。
@@ -104,7 +104,7 @@ def build_group_2nn_simple(flann, feature_data, params, threshold):
     order_positions, order_neighbors, order_distances = _find_and_sort_neighbor(neighbors, distances, threshold)
 
     n = len(order_positions)
-    logger.info(" % points with neighbors in the threshold are sorted" % n)
+    logger.info(" %s points with neighbors in the threshold are sorted" % n)
 
     logger.info("start to cluster %s points into groups" % n)
     # twitter用feature data中的pos表示
@@ -114,18 +114,22 @@ def build_group_2nn_simple(flann, feature_data, params, threshold):
         if i % 10000 == 0:
             logger.debug("  %s points has been processed " % i)
         point = order_positions[i]
+        
+        # if point in (4232,30124,35934,42950,6071):
+        #    import pdb
+        #    pdb.set_trace()
 
         # point已经被其他最近邻纳入某个同款组。 风险：当前最近邻不能发挥作用。
         if point in pos2groupid:
             continue
         members = order_neighbors[i]
-        n = len(members)
+        m = len(members)
         checked_group = []
         is_grouped = False
-        i = 0
-        while not is_grouped and i < n :
-            nn = members[i]
-            i += 1
+        j = 0
+        while not is_grouped and j < m :
+            nn = members[j]
+            j += 1
             groupid = pos2groupid.get(nn)
             if groupid is not None:
                 if groupid not in checked_group:
@@ -192,7 +196,7 @@ def _split_group(points, feature_data, threshold):
     """
     points = list(points)
     vector = feature_data[points]
-    cdist = scipy.spatial.distance.cdist(vector, vector)
+    cdist = scipy.spatial.distance.cdist(vector, vector, 'sqeuclidean')
     max_value = cdist.max()
     if max_value < threshold:
         return [points]

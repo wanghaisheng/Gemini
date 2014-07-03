@@ -60,9 +60,11 @@ def main(args):
         ids = group.get_group_list()
     else:
         twitters = map(int, args.ids.split(','))
-        ids = []
+        ids = set()
         for t in twitters:
-            ids.append(group.get_group(t))
+            e = group.get_group(t)
+            if e is not None:
+                ids.add(e)
 
     large_groups = []
     for pos in ids:

@@ -94,7 +94,7 @@ class Group():
 
 
     def get_group(self, pos):
-        return self._pos2groupid[pos]
+        return self._pos2groupid.get(pos)
 
     def get_group_list(self):
         return self._groupid2pos.keys()
@@ -110,7 +110,7 @@ class Group():
 
     def get_distance_matrix(self, points):
         vector = self._feature_data[points]
-        return scipy.spatial.distance.cdist(vector, vector)
+        return scipy.spatial.distance.cdist(vector, vector, 'sqeuclidean')
 
     def insert(self, group_id, neighbor, feature=None):
 
