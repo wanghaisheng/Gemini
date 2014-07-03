@@ -77,7 +77,9 @@ def main(args):
 
         fh = open(temp_file, 'w')
         for s in large_groups:
+            positions = map(lambda x: "[[%s]]" % x, s)
             urls = map(lambda x: "[[%s]]" % group.get_url(x), s)
+            print >> fh, "| %s |" % " | ".join(positions)
             print >> fh, "| %s |" % " | ".join(urls)
             print >> fh
         fh.close()
