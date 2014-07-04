@@ -14,6 +14,10 @@ import os.path
 from argparse import ArgumentParser
 from time import time
 import logging
+try:
+    import cjson as json
+except ImportError:
+    import json
 
 import tornado.httpserver
 import tornado.ioloop
