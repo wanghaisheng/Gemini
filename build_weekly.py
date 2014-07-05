@@ -17,27 +17,29 @@ from time import time
 from argparse import ArgumentParser
 import subprocess
 import StringIO
+import logging
 
 from contexttimer import Timer
 import numpy as np
 from pyflann import FLANN
-import MySQLdb
 
-from samelib.idgroup import IDGroup
+
+
 from samelib.utils import setup_logger
 from samelib.config import Config
 from samelib.twitter import TwitterInfo
 
 conf = Config('./conf/build.yaml')
 
-LOG_LEVEL = logging.DEBUG
-LOG_FILE = conf['WORK_BASE_PATH'] + '/log/build_weekly.log'
+LOG_LEVEL       = logging.DEBUG
+LOG_FILE        = conf['WORK_BASE_PATH'] + '/log/build_weekly.log'
 LOG_SCREEN_FILE = conf['WORK_BASE_PATH'] + '/log/build_weekly.screen.log'
-DATA_PATH = conf['WORK_BASE_PATH'] + '/data/index_base'
-MIN_SHOW_PV = conf['MIN_SHOW_PV']
+DATA_PATH       = conf['WORK_BASE_PATH'] + '/data/index_base'
+MIN_SHOW_PV     = conf['MIN_SHOW_PV']
+HIVE_PATH       = conf['HIVE_PATH']
 
 logger = setup_logger('WEK', LOG_FILE, LOG_LEVEL)
-screen_logger = setup_logger('WEK', LOG_SCREEN_FILE, LOG_LEVEL)
+screen_logger = setup_logger('WEK.SCR', LOG_SCREEN_FILE, LOG_LEVEL)
 
 def build_flann_index(args):
     """
@@ -87,7 +89,7 @@ def parse_args():
 
     if args.start is None:
         start_date = args.end - datetime.timedelta(days=6)
-        args.start = start_date.strftime("%Y-%m-%d")
+        args.start = start_date
     else:
         args.start = datetime.datetime.strptime(args.start, "%Y-%m-%d")
 
@@ -116,9 +118,19 @@ def get_twitter_info_by_hive(fn, start, end, pv):
     cur = start
     while cur <= end:
         days.append(cur.strftime("%Y-%m-%d"))
+        cur += datetime.timedelta(days=1)
     days_string = ','.join(map(lambda x: "'%s'" % x, days))
 
+    hive_out = os.path.dirname(fn) + '/hive-out'
+    if os.path.exists(hive_out):
+        logger.info("remove hive output dir %s" % hive_out )
+        os.removedirs(hive_out)
+    os.makedirs(hive_out)
+        
+
     hql = """
+ set hive.exec.compress.output=false;
+ insert overwrite local directory '%(hive_out)s'
  select A.twitter_id, A.goods_id, A.shop_id, A.goods_first_catalog, A.goods_img  from
  ( select twitter_id, goods_id, shop_id, goods_img, goods_first_catalog
    from ods_brd_shop_goods_info
@@ -126,22 +138,32 @@ def get_twitter_info_by_hive(fn, start, end, pv):
  A join
  ( select distinct(twitter_id)
    from ods_dolphin_stat_sell_pool
-   where dt in (%(dates)s) and yesterday_shows > %(show)s group by twitter_id
+   where dt in (%(dates)s) and yesterday_shows > %(show)s 
 )
- B on (A.twitter_id = B.twitter_id) ; """ % {'dates': days_string, 'shows': MIN_SHOW_PV }
-    cmds = ['hive', '-e', hql.replace("\n", "")]
+B on (A.twitter_id = B.twitter_id) ; """ % {'dates': days_string, 'show': MIN_SHOW_PV, 'hive_out': hive_out }
+    cmds = [HIVE_PATH +'/hive', '-e', hql.replace("\n", "")]
 
     logger.info("execute hive with date in (%s) and threshold=%s" % (days_string, MIN_SHOW_PV))
     screen_logger.info("execute hive cmd %s" % " ".join(cmds))
-    stdout = open(fh, "w")
-    stderr = StringIO.StringIO()
+
     with Timer() as t:
-        retcode = subprocess.call(cmd, stdout=stdout, stderr=stderr)
-    logger.info("[%s] hive cmds returns %s" % (t.elapsed, retcode))
-    stderr.seek(0)
-    screen_logger.info("hive cmds stderr:\n %s" % stderr.read())
-    if retcode != 0:
+        ps = subprocess.Popen(cmds, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        ps.wait()
+        
+    logger.info("[%s] hive cmds returns %s" % (t.elapsed, ps.returncode))
+    logger.info("hive cmds print to screen:\n %s" % ps.stdout.read())
+    if ps.returncode != 0:
         sys.exit(1)
+
+    cmds = ["sed 's/\x01/\x09/g' %s/0* > %s" % (hive_out, fn)]
+    with Timer() as t:
+        ps = subprocess.Popen(cmds, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
+        ps.wait()
+    logger.info("[%s] retcode=%s. run cmd :  %s" % (t.elapsed, ps.returncode, cmds))
+    logger.info("sed cmds print to screen:\n %s" % ps.stdout.read())
+    if ps.returncode != 0:
+        sys.exit(1)
+
 
     return True
 
@@ -155,7 +177,7 @@ def main(args):
     """
     data_dir = DATA_PATH + '/base_%s_%s' % (args.start.strftime("%Y%m%d"), args.end.strftime("%Y%m%d"))
     if not os.path.exists(data_dir):
-        os.mkdir(data_dir)
+        os.makedirs(data_dir)
     twitter_info_file = data_dir + '/twitter_info_file'
     if args.force or not os.path.exists(twitter_info_file):
         get_twitter_info_by_hive(twitter_info_file, args.start, args.end, pv = MIN_SHOW_PV)
@@ -171,6 +193,8 @@ def main(args):
             logger.info("[%s] base twitter info file %s is loaded" % (t.elapsed, args.basefile))
             twitter_info.merge(twitter_info_base)
             twitter_info.save(twitter_info_file)
+    else:
+        logger.info("twitter_info_file %s is ready" % twitter_info_file )
 
     # 只进行第一步。
     sys.exit(0)

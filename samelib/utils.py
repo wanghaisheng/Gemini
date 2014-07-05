@@ -11,10 +11,14 @@
 
 
 import os
+import sys
 import logging
 
 import numpy as np
 import scipy.spatial
+
+# from config import Config
+# conf = Config('../conf/build.yaml')
 
 def distance_matrix(points, feature_data):
     vector = feature_data[points]
@@ -67,6 +71,11 @@ def setup_logger(name, fn, level):
     handler = logging.FileHandler(fn)
     handler.setFormatter(formatter)
     logger.addHandler(handler)
+
+    if 1 : # if conf['IS_PRINT_LOG_TO_SCREEN']:
+        handler = logging.StreamHandler(sys.stderr)
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
 
     return logger
 

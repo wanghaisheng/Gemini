@@ -1,12 +1,17 @@
-WORK_BASE_PATH  :  /home/work/Gemini
+# WORK_BASE_PATH  :  /home/work/Gemini
+WORK_BASE_PATH  :  /home/work/taopeng/projects/20140529-detect-same-items/new-Gemini/Gemini
 
-MIN_SHOW_PV     :  5 # twitter����չ�־�ֵ����ֵ����������ֵ�������������ѡ��
+MIN_SHOW_PV     :  5 # twitter多天展现均值（中值）超过次阈值，则进入索引候选集
 
-MAX_TWITTER_NUMBER : 1000000 # ��������������ֵ��clothes���
+MAX_TWITTER_NUMBER : 1000000 # 单个索引库的最大值（clothes类别）
 
-GOODS_CATEGORYS:             # ��Ʒ��𣬣����ཨ��������
+GOODS_CATEGORYS:             # 商品类别，（分类建立索引）
   - clothes
   - shoes
   - bag
   - acc
   - other
+
+IS_PRINT_LOG_TO_SCREEN : 1   # 是否把日志向屏幕打印（logger）
+
+HIVE_PATH : /hadoop/hive/bin
