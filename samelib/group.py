@@ -33,6 +33,11 @@ class Group():
     def set_feature(self, data):
         self._feature_data = data
 
+    def set_info(self, pos2group, group2pos):
+
+        self._pos2groupid = pos2group
+        self._groupid2pos = group2pos
+
     def load(self, fn):
         """
          读取pickle中的同款组映射信息
@@ -42,6 +47,8 @@ class Group():
             self._pos2groupid = pos2groupid
             self._groupid2pos = groupid2pos
         return True
+
+
 
     def load_tid(self, fn):
         """
@@ -65,7 +72,7 @@ class Group():
             cPickle.dump(ret, fh, protocol=2)
         return True
 
-    def from_txt(self, pos_file, group_file):
+    def from_pos_txt(self, pos_file, group_file, sep="\t"):
         """
         解析文本格式的同款组文件 pos2groupid和group2pos文件。
         @param pos_file: pos2groupid文件
@@ -73,24 +80,38 @@ class Group():
         @return: True
         """
 
-        self._pos2groupid = flat2dict(tid_file)
-        self._groupid2pos = flat2dict_ext(groupid_file)
+        self._pos2groupid = {}
+        self._groupid2pos = {}
 
-        for k, v in self._groupid2pos.iteritems():
-            self._groupid2pos[k] = set(v)
+        for line in open(pos_file):
+            k, v = line.strip().split(sep)
+            self._pos2groupid[int(k)] = int(v)
+
+        for line in open(group_file):
+            fields = line.strip().split(sep)
+            self._groupid2pos[int(fields[0])] = set(map(int, fields[1:]))
 
         return True
 
 
-    def to_txt(self, pos_file, group_file):
-
-        with open(pos_file, 'w') as fh:
-            for k in sorted(self._pos2groupid):
-                print >> fh, "%s\t%s" % (k, self._pos2groupid[k])
-
-        with open(group_file, 'w') as fh:
-            for k in sorted(self._groupid2pos):
-                print >> fh, "%s\t%s" % (k, "\t".join(self._groupid2pos[k]))
+    def to_txt(self, pos_file, group_file, twitter_info=None):
+        """
+        twitter_info保存tid信息，如果为None，直接存pos信息。
+        """
+        if twitter_info is None:
+            with open(pos_file, 'w') as fh:
+                for k, v in self._pos2groupid.iteritems():
+                    print >> fh, "%s\t%s" % (k, v)
+            with open(group_file, 'w') as fh:
+                for k, v in self._groupid2pos.iteritems():
+                    print >> fh, "%s\t%s" % (k, "\t".join(map(str,v)))
+        else:
+            with open(pos_file, 'w') as fh:
+                for k, v in self._pos2groupid.iteritems():
+                    print >> fh, "%s\t%s" % (twitter_info[k][0], twitter_info[v][0])
+            with open(group_file, 'w') as fh:
+                for k,v in self._groupid2pos.iteritems():
+                    print >> fh, "%s\t%s" % (k, "\t".join(map(lambda x : twitter_info[x][0], v)))
 
 
     def get_group(self, pos):
@@ -100,7 +121,7 @@ class Group():
         return self._groupid2pos.keys()
 
     def get_member(self, group_id):
-        return self._groupid2pos[group_id]
+        return self._groupid2pos.get(group_id)
 
     def get_url(self, pos):
         if self._tid_and_url:

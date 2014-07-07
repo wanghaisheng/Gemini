@@ -14,4 +14,11 @@ GOODS_CATEGORYS:             # 商品类别，（分类建立索引）
 
 IS_PRINT_LOG_TO_SCREEN : 1   # 是否把日志向屏幕打印（logger）
 
-HIVE_PATH : /hadoop/hive/bin
+HIVE_PATH : /hadoop/hive/bin   # hive的路径
+
+IMAGE_FEATURE_DIM : 960       # 图片提取特征的维数
+
+
+
+
+

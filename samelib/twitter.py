@@ -51,8 +51,11 @@ class TwitterInfo():
             if tid not in self._tid_dict:
                 self._data.append(l)
                 tid_dict[tid] = l
+
         for tid, val in tid_dict.iteritems():
             self._tid_dict[tid] = val
+
+        self._length = len(self._data)
 
         return
 
@@ -66,6 +69,12 @@ class TwitterInfo():
 
     def get_data(self):
         return self._data
+
+    def get_length(self):
+        return self._length
+
+    def append(self, line):
+        self._data.append(line)
 
 if __name__=='__main__':
    raise Exception("do not run it directly.")
