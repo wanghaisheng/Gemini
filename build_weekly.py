@@ -111,6 +111,7 @@ def build_group_index(group_pickle_file, group_dump_tid2group, group_dump_group2
     return group
 
 
+
 def build_group_xnn_simple(twitter_info, feature_data, flann, params, threshold):
     """ 考察n个近邻。不同点按照最近邻的距离排序，依次处理。
     1. 如果最近邻属于一个分组, 且与分组中所有元素距离小于阈值，则加入该组。
@@ -429,6 +430,34 @@ def prepare_twitter_info_with_feature(info_file, feature_file, info_data_raw, fo
     return twitter_info, feature_data
 
 
+def stat_shop_group_info(shop_group_file, group, twitter_info, force=False):
+    """统计店家商品中重复的比例"""
+    if not force and os.path.exists(shop_group_file):
+        logger.info("shop stat file %s is ready" % (shop_group_file)
+        return True
+
+    with Timer() as t:
+        twitter_data = twitter_info.get_data()
+        shop_info = {}
+        n = len(twitter_data)
+        for i in xrange(n):
+            tid, goods_id, shop_id, category, url = twitter_data[i]
+            if shop_id not in shop_info:
+                shop_info[shop_id] = [0, 0]
+            shop_info[shop_id][1] += 1
+            if group.get_group(i) is not None:
+                shop_info[shop_id][0] += 1
+
+        with open(shop_group_file, 'w') as fh:
+            for k, v in shop_info.iteritems():
+                print "%s\t%s\t%s\t%s" (k, v[0], v[1], float(v[0])/v[1])
+    logger.info("[ %s ] calc the duplicated image for every shop in %s" % (t.elapsed, shop_group_file))
+
+    return True
+
+
+
+
 
 
 def main(args):
@@ -462,6 +491,9 @@ def main(args):
     group = build_group_index(group_pickle_file, group_dump_tid2group, group_dump_group2tid,
                               twitter_info, feature_data, flann, params, threshold=GROUPING_DISTANCE,
                               algorithm='xnn_simple', force=args.force)
+
+    shop_group_file = data_dir + '/shop_group_stat'
+    shop_group_info = stat_shop_group_info(shop_group_file, group, force=args.force)
 
 
 
