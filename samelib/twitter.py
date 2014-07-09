@@ -21,7 +21,7 @@ class TwitterInfo():
     def __init__(self, ):
         """Constructor for TwitterInfo"""
         self._length =  -1
-        self._data = None
+        self._data = []
         self._tid_dict = {}
 
     def load(self, fn, sep="\t"):
@@ -67,6 +67,9 @@ class TwitterInfo():
 
         return
 
+    def __getitem__(self, i):
+        return self._data[i]
+    
     def get_data(self):
         return self._data
 

@@ -10,6 +10,7 @@
      1. 2014/7/5 23:43 : feature.py is created.
 """
 
+import os
 import sys
 import re
 

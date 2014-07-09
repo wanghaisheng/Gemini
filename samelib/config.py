@@ -31,10 +31,10 @@ class Config():
     def _valid(self):
         path = self['WORK_BASE_PATH'] + '/log'
         if not os.path.exists(path):
-            os.mkdir(path)
+            os.makedirs(path)
         path = self['WORK_BASE_PATH'] + '/data'
         if not os.path.exists(path):
-            os.mkdir(path)
+            os.makedirs(path)
 
 
 if __name__=='__main__':

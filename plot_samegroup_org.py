@@ -17,10 +17,12 @@ from argparse import ArgumentParser
 import cPickle
 from collections import Counter
 import time
+import random
 
-from group import Group
-from utils import try_load_npy, distance_matrix
+from samelib.group import Group
+from samelib.utils import try_load_npy, distance_matrix
 
+IMAGE_URL = 'http://imgst.meilishuo.net/'
 
 #----------------------------------------------------------------------
 def parse_args():
@@ -34,6 +36,7 @@ def parse_args():
     parser.add_argument("--url", help="the file for twitter id and urls.")
     parser.add_argument("--feature", help="feature file for drawing distance matrix.")
     parser.add_argument("--ids", help="少量twitter的id信息，只展现这些id的信息. 1,3,5")
+    parser.add_argument("--ratio", type=float, default=1, help="数量太大的时候，展示数据的比例。 默认值1，全部展示")
     args = parser.parse_args()
     return args
 
@@ -91,9 +94,11 @@ def main(args):
 
         fh = open(temp_file, 'w')
         for s in large_groups:
+            if random.random() > args.ratio:
+                continue
             s = list(s)
-            positions = map(lambda x: "%s" % x, s)
-            urls = map(lambda x: "[[%s]]" % group.get_url(x), s)
+            positions = map(lambda x: "%s([[http://www.meilishuo.com/share/item/%s][tid=%s]]) " % (x, group.get_twitter_id(x),group.get_twitter_id(x)), s)
+            urls = map(lambda x: "[[%s%s]]" % (IMAGE_URL,group.get_url(x)), s)
             print >> fh, "| %s |" % " | ".join(positions)
             if args.feature is not None:
                 n = len(s)

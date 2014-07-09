@@ -17,13 +17,11 @@ from argparse import ArgumentParser
 import subprocess
 import StringIO
 import logging
-try:
-    import cjson as json
-except ImportError:
-    import json
+import json
 
 from contexttimer import Timer
 import numpy as np
+import scipy
 from pyflann import FLANN
 import leveldb
 
@@ -49,8 +47,8 @@ HIVE_PATH       = conf['HIVE_PATH']
 
 IMAGE_FEATURE_DIM = conf['IMAGE_FEATURE_DIM']
 
-ITER_RANGE      = 100  # 图片加载计算特征，每100个输出一次状态。
-ITER_RANGE2      = 500  # 同款组聚类，每500个完成一次输出。
+ITER_RANGE      = 10000  # 图片加载计算特征，每100个输出一次状态。
+ITER_RANGE2      = 10000  # 同款组聚类，每500个完成一次输出。
 IMAGE_SERVER    = 'http://imgst.meilishuo.net'
 GROUPING_DISTANCE = 0.09 # 平方距离（欧式距离平方）阈值。不区分类别时取0.3*0.3
 NUM_NEIGHBORS    = 10     #
@@ -202,11 +200,9 @@ def build_group_xnn_simple(twitter_info, feature_data, flann, params, threshold)
                 is_grouped = True
 
     e_t = time.time()
-    logger.info("[] clustering all points into group is done" % (e_t-s_t))
+    logger.info("[ %s ] clustering all points into group is done" % (e_t-s_t))
+    return pos2groupid, groupid2pos
 
-    group = Group()
-    group.set_info(pos2groupid, groupid2pos)
-    return group
 
 def _find_and_sort_neighbor(neighbors, distances, threshold):
     """
@@ -356,7 +352,7 @@ def prepare_twitter_info_with_feature(info_file, feature_file, info_data_raw, fo
     TODO： 下载图片数据计算特征很耗时，比较适合可以利用多线程or多进程进行并行化。
     """
 
-    feature_file_npy = feature_file = '.npy'
+    feature_file_npy = feature_file + '.npy'
 
     twitter_info = TwitterInfo()
 
@@ -380,7 +376,7 @@ def prepare_twitter_info_with_feature(info_file, feature_file, info_data_raw, fo
     for i_total in xrange(n_raw):
         if i_total % ITER_RANGE == 0:
             end_i = time.time()
-            logger.info("[ %s ] download and compute %s images, db_hit=%s, db_miss=%s" % (end_i-start_i, i_total, i_db_hit, i_db_miss))
+            logger.debug("[ %s ] download and compute %s images, db_hit=%s, db_miss=%s" % (end_i-start_i, i_total, i_db_hit, i_db_miss))
             sys.stdout.flush()
             t_db_hit += i_db_hit
             t_db_miss += i_db_miss
@@ -388,7 +384,10 @@ def prepare_twitter_info_with_feature(info_file, feature_file, info_data_raw, fo
             i_db_hit, i_db_miss = 0, 0
 
         line = info_data_raw[i_total]
+        if len(line) != 5:
+            continue
         tid, gid, shop_id, cat, url = line
+            
         feature = None
         try:  # 目标数据库
             val_r = db.Get(url)
@@ -435,9 +434,12 @@ def prepare_twitter_info_with_feature(info_file, feature_file, info_data_raw, fo
 def main(args):
     """
     """
+
     data_dir = DATA_PATH + '/base_%s_%s' % (args.start.strftime("%Y%m%d"), args.end.strftime("%Y%m%d"))
     if not os.path.exists(data_dir):
         os.makedirs(data_dir)
+    logger.info("==================== start to build %s ======================" % data_dir )
+    
 
     twitter_info_raw_file = data_dir + '/twitter_info_raw'
     twitter_info_raw = prepare_twitter_raw_info(twitter_info_raw_file, args.start, args.end, pv=MIN_SHOW_PV,

@@ -54,7 +54,7 @@ class Group():
         """
         读取 twitter， 更新时间和image url的数据
         """
-        self._tid_and_url = flat2list(fn, sep=' ')
+        self._tid_and_url = flat2list(fn, sep=None)
 
     def tid_num(self):
         if self._tid_and_url:
@@ -111,7 +111,7 @@ class Group():
                     print >> fh, "%s\t%s" % (twitter_info[k][0], twitter_info[v][0])
             with open(group_file, 'w') as fh:
                 for k,v in self._groupid2pos.iteritems():
-                    print >> fh, "%s\t%s" % (k, "\t".join(map(lambda x : twitter_info[x][0], v)))
+                    print >> fh, "%s\t%s" % (twitter_info[k][0], "\t".join(map(lambda x : twitter_info[x][0], v)))
 
 
     def get_group(self, pos):
@@ -126,6 +126,11 @@ class Group():
     def get_url(self, pos):
         if self._tid_and_url:
             return self._tid_and_url[pos][-1]
+        else:
+            return None
+    def get_twitter_id(self, pos):
+        if self._tid_and_url:
+            return self._tid_and_url[pos][0]
         else:
             return None
 
