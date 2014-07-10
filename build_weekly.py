@@ -433,7 +433,7 @@ def prepare_twitter_info_with_feature(info_file, feature_file, info_data_raw, fo
 def stat_shop_group_info(shop_group_file, group, twitter_info, force=False):
     """统计店家商品中重复的比例"""
     if not force and os.path.exists(shop_group_file):
-        logger.info("shop stat file %s is ready" % (shop_group_file)
+        logger.info("shop stat file %s is ready" % (shop_group_file))
         return True
 
     with Timer() as t:
@@ -450,7 +450,7 @@ def stat_shop_group_info(shop_group_file, group, twitter_info, force=False):
 
         with open(shop_group_file, 'w') as fh:
             for k, v in shop_info.iteritems():
-                print "%s\t%s\t%s\t%s" (k, v[0], v[1], float(v[0])/v[1])
+                print >>fh, "%s\t%s\t%s\t%s" % (k, v[0], v[1], float(v[0])/v[1])
     logger.info("[ %s ] calc the duplicated image for every shop in %s" % (t.elapsed, shop_group_file))
 
     return True
@@ -493,7 +493,7 @@ def main(args):
                               algorithm='xnn_simple', force=args.force)
 
     shop_group_file = data_dir + '/shop_group_stat'
-    shop_group_info = stat_shop_group_info(shop_group_file, group, force=args.force)
+    stat_shop_group_info(shop_group_file, group, twitter_info, force=args.force)
 
 
 
