@@ -34,19 +34,12 @@ def parse_args():
     parser.add_argument("group_file", metavar='GROUP', help="the group id pickle dump file.")
     parser.add_argument("twitter_file", metavar='TWITTER', help="the twitter info file.")
     parser.add_argument("output", metavar='OUTPUT', help="the output html file.")
-<<<<<<< HEAD
     parser.add_argument("--num", type=int, default=20, help="the minimum 商品数量. default 20.")
     parser.add_argument("--ratio", type=float, default=0.2, help="最低店内同款率. default 0.2.")    
     parser.add_argument("--feature", help="feature file for drawing distance matrix.")
     parser.add_argument("--shop_ids", help="少量shop的id信息，只展现这些商家的信息. 1,3,5. ")
     parser.add_argument("--maxshow", type=int, default=5, help="同店同款，最大展现数量. default 5 ")
     parser.add_argument("--maxgroup", type=int, default=10, help="同店同款，最大group展现数量. default 10 ")
-=======
-    parser.add_argument("--num", type=int, default=2, help="the minimum group size. default 2.")
-    parser.add_argument("--feature", help="feature file for drawing distance matrix.")
-    parser.add_argument("--shop_ids", help="少量shop的id信息，只展现这些商家的信息. 1,3,5")
-    parser.add_argument("--max", type=int, default=10, help="同一商家，同一款式，最大展现数量，避免拖垮浏览器")
->>>>>>> d4d20e43a23cb38258615ba485a29830fcb6dc16
     args = parser.parse_args()
     return args
 
@@ -106,7 +99,6 @@ def main(args):
 
         result_map[shop] = ret
 
-<<<<<<< HEAD
     output_file = args.output
     if output_file.endswith('.html') or output_file.endswith('.htm'):
         temp_file = output_file.rsplit('.', 1)[0] + '.org'
@@ -150,60 +142,6 @@ def main(args):
     fh.close()
     cmd = " emacs --kill --batch %s -f org-export-as-html " % temp_file
     os.system(cmd)
-=======
-    for shop in result_map:
-        info = result_map[shop]
-        print "%s\t%s\t%s" % (float(info['repeat'])/info['total'], info['repeat'], info['total'])
-
-    sys.exit(1)
-    
-    large_groups = []
-    for pos in ids:
-        members = group.get_member(pos)
-        n = len(members)
-        dist_group_size[n] += 1
-        if len(members) < args.num:
-            continue
-        large_groups.append(members)
-
-    bins = dist_group_size.keys()
-    for k in bins:
-        if count_total:
-            print "size %s = %s\t\t[%s]" % (k, dist_group_size[k], dist_group_size[k] / float(count_total))
-        else:
-            print "size %s = %s" % (k, dist_group_size[k])
-
-    if args.url is not None:
-        output_file = args.output
-        if output_file.endswith('.html') or output_file.endswith('.htm'):
-            temp_file = output_file.rsplit('.', 1)[0] + '.org'
-        else:
-            temp_file = output_file + '.org'
-
-        fh = open(temp_file, 'w')
-        for s in large_groups:
-            if random.random() > args.ratio:
-                continue
-            s = list(s)
-            positions = map(lambda x: "%s([[http://www.meilishuo.com/share/item/%s][tid=%s]]) " % (x, group.get_twitter_id(x),group.get_twitter_id(x)), s)
-            urls = map(lambda x: "[[%s%s]]" % (IMAGE_URL,group.get_url(x)), s)
-            print >> fh, "| %s |" % " | ".join(positions)
-            if args.feature is not None:
-                n = len(s)
-                matrix = group.get_distance_matrix(s)
-                for i in range(n):
-                    v = matrix[i]
-                    print >> fh, "| %s |" % " | ".join(map(str, v))
-
-            print >> fh, "| %s |" % " | ".join(urls)
-            print >> fh
-        fh.close()
-        # wiki to html
-        cmd = " emacs --kill --batch %s -f org-export-as-html " % temp_file
-        os.system(cmd)
->>>>>>> d4d20e43a23cb38258615ba485a29830fcb6dc16
-
-
 
 
 if __name__=='__main__':
