@@ -453,10 +453,6 @@ def stat_shop_group_info(shop_group_file, group, twitter_info, force=False):
                 print >>fh, "%s\t%s\t%s\t%s" % (k, v[0], v[1], float(v[0])/v[1])
     logger.info("[ %s ] calc the duplicated image for every shop in %s" % (t.elapsed, shop_group_file))
 
-    return True
-
-
-
 
 
 
