@@ -8,14 +8,16 @@
  History:
      1. 2014/6/30 23:08 : index.py is created.
 """
-
-
+import json
 
 import sys
 import os
 
 import numpy as np
 from pyflann import FLANN
+
+from twitter import TwitterInfo
+from utils import try_load_npy
 
 
 class Index():
@@ -24,46 +26,72 @@ class Index():
         """
         _para is from flann.build_index()
         """
-        self._data = {}
-        self._para = TODO
+        self._flann = FLANN()
+        self._flann_para = None
+        self._twitter_info = TwitterInfo()
+        self._feature_data = None
+
 
     def clear(self):
         self._data = {}
 
-    def load(self, categorys, dir):
+    def load(self, dir):
         """
-        @param categorys: list, ['clothes', 'shoes', 'bag']
-        @param dir:       path to index files
+        dir:  path to index files
         """
-        for c in categorys:
-            data = np.load("%s_data.npy" % c)
-            flann = FLANN()
-            flann.load_index("%s_index.flann" % c, data)
-            tid2img = self._load_tid("%s_tid_with_img.txt" % c)
-
-            self._data[c]['data'] = data
-            self._data[c]['flann'] = flann
-            self._data[c]['tid2img'] = tid2img
+        self._twitter_info.load(dir+"/twitter_info")
+        self._feature_data = try_load_npy(dir+'/feature_data')
+        self._flann.load_index(dir+'/flann_index', self._feature_data)
+        self._flann_para = json.load(open(dir+'/flann_index_para'))
 
         return True
 
-    def _load_tid(self, fn):
-        """
-        2881539803 http://imgst.meilishuo.net/pic/_o/db/9c/8bd91fb17f573bf97f3147e1df7c_640_900.c8.jpg
-        2880736071 http://imgst.meilishuo.net/pic/_o/e9/f7/41314b0d3bd895a56f0b05be6c65_640_900.c8.jpg
-        """
-        ret = []
-        for line in file(fn):
-            fields = line.strip().split()
-            ret.append(fields)
-        return ret
+    def search(self, feature, neighbors=5):
+        return self._flann.nn_index(feature, num_neighbors=neighbors, **self._flann_para)
 
-    def get_index(self, name):
-        return self._data[name]
+    def get_tid(self, pos):
+        return self._twitter_info[pos][0]
 
-    def search(self, feature, category, num=5):
-        flann = self.get_index(category)
-        return flann.nn_index(feature, num_neighbors=num, **self._para)
+    def get_twitter_info(self, pos=None):
+        if pos is None:
+            return self._twitter_info
+        else:
+            return self._twitter_info[pos]
+
+    def insert(self, feature_data, twitter_info):
+        """
+        注意： 只有liner index支持插入，任何索引一旦插入，则变为linear索引
+        返回插入数据在索引中的位置
+        """
+        offset = self._twitter_info.get_length()
+
+        self._feature_data = np.append(self._feature_data, feature_data)
+        self._twitter_info.set_data(self._twitter_info.get_data() + twitter_info.get_data())
+        para = self._flann.build_index(self._feature_data, algorithm='linear')
+        self._flann_para = para
+        return offset
+
+    def shrink(self, max_size, min_size):
+        """ 如果索引超过一定规模，则进行瘦身。
+        """
+        assert(max_size > min_size)
+
+        if self._twitter_info.get_length() <= max_size:
+            return -1
+        else:
+            n = self._twitter_info.get_length()
+            feature_data = self._feature_data[-min_size:]
+            twitter_data = self._twitter_info.get_data()[-min_size:]
+            para = self._flann.build_index(feature_data, algorithm='linear')
+            self._flann_para = para
+            self._twitter_info.set_data(twitter_data)
+            self._feature_data = feature_data
+            return n
+
+
+
+
+
 
 if __name__=='__main__':
     pass

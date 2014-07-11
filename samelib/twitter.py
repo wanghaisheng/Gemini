@@ -73,6 +73,11 @@ class TwitterInfo():
     def get_data(self):
         return self._data
 
+    def set_data(self, info_data):
+        self._data = info_data
+        self._length = len(info_data)
+
+
     def get_length(self):
         return self._length
 
