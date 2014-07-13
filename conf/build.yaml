@@ -7,11 +7,55 @@ MIN_SHOW_PV     :  5 # twitter多天展现均值（中值）超过次阈值，�
 MAX_TWITTER_NUMBER : 1000000 # 单个索引库的最大值（clothes类别）
 
 GOODS_CATEGORYS:             # 商品类别，（分类建立索引）
-  - clothes
-  - shoes
-  - bag
-  - acc
-  - other
+  -
+    name : clothes
+    threshold : 0.1089     # 同款距离阈值， 欧式距离的平方
+    prefix:     '2'        # 类目id的前缀
+  -
+    name : shoes
+    threshold : 0.09
+    prefix:      '6'
+  -
+    name : bag
+    threshold : 0.1225
+    prefix:      '5'
+  -
+    name : acc
+    threshold : 0.04
+    prefix:      '7'
+  -
+    name : other
+    threshold  : 0.0625
+    prefix:       ''        # 其他所有
+
+FLANN_BUILD_INDEX_PARA:
+  -
+    num: 50000
+    algorithm : kmeans
+    iterations: 10
+    branching: 32
+    checks: 1024
+
+  -
+    num:  200000
+    algorithm: kmeans
+    iterations: 10
+    branching:  64
+    checks: 2048
+
+  -
+    num:  500000
+    iterations: 10
+    algorithm: kmeans
+    branching: 128
+    checks: 4096
+
+  -
+    num: 1000000
+    iterations: 10
+    algorithm: kmeans
+    branching: 256
+    checks: 8192
 
 IS_PRINT_LOG_TO_SCREEN : 1   # 是否把日志向屏幕打印（logger）
 
@@ -20,6 +64,8 @@ HIVE_PATH : /hadoop/hive/bin   # hive的路径
 IMAGE_FEATURE_DIM : 960       # 图片提取特征的维数
 
 SERVER_PORT       : 8773
+
+IS_DUMP_TXT_FEATURE   : 0     # 是否保存txt版本的图片feature， 960维， 比较耗时
 
 
 

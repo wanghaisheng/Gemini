@@ -19,8 +19,10 @@ import scipy.spatial
 
 import leveldb
 
-# from config import Config
-# conf = Config('../conf/build.yaml')
+from config import Config
+conf = Config('./conf/build.yaml')
+
+GOODS_CATEGORY = conf['GOODS_CATEGORY']
 
 def distance_matrix(points, feature_data):
     vector = feature_data[points]
@@ -186,6 +188,17 @@ def extract_img_feature(url):
     os.system(cmd)
     query = np.genfromtxt(output_file)
     return query
+
+_catalog_id_rules = []
+def catalog_id_to_name(catalog_id):
+    if not _catalog_id_rules:
+        for ele in GOODS_CATEGORY:
+            _catalog_id_rules.append((ele['prefix'], ele['name']))
+    for rule in _catalog_id_rules:
+        if catalog_id.starswith(rule[0]):
+            return rule[1]
+    return 'error'
+
 
 if __name__=='__main__':
     pass

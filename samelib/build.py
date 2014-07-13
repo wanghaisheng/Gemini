@@ -19,6 +19,7 @@ import subprocess
 import StringIO
 import logging
 import json
+import math
 
 from contexttimer import Timer
 import numpy as np
@@ -26,7 +27,7 @@ import scipy
 from pyflann import FLANN
 import leveldb
 
-from samelib.utils import setup_logger
+from samelib.utils import setup_logger, catalog_id_to_name
 from samelib.config import Config
 from samelib.twitter import TwitterInfo
 from samelib.utils import try_load_npy, get_feature_db
@@ -42,18 +43,32 @@ DATA_PATH = WORK_BASE_PATH + '/data/index_day'
 FEATURE_DB_PATH = WORK_BASE_PATH + '/data/feature_all_leveldb'
 
 IMAGE_FEATURE_DIM = conf['IMAGE_FEATURE_DIM']
+IS_DUMP_TXT_FEATURE = conf['IS_DUMP_TXT_FEATURE']
+
+FLANN_BUILD_INDEX_PARA = conf['FLANN_BUILD_INDEX_PARA']
+
+GOODS_CATEGORY = conf['GOODS_CATEGORY']
 
 ITER_RANGE = 1000  # 图片加载计算特征，每100个输出一次状态。
 ITER_RANGE2 = 100  # 同款组聚类，每500个完成一次输出。
 IMAGE_SERVER = 'http://imgst.meilishuo.net'
-GROUPING_DISTANCE = 0.09  # 平方距离（欧式距离平方）阈值。不区分类别时取0.3*0.3
 NUM_NEIGHBORS = 10  #
 
 # logger = setup_logger('BLD')
 # db = leveldb.LevelDB(FEATURE_DB_PATH)
 
 
-def build_flann_index(index_file, para_file, feature_data, force=False, algorithm='autotuned'):
+
+def _pick_flann_para(n, PARA):
+
+    for para_set in PARA:
+        if n < para_set['num']:
+            return para_set
+    logger = setup_logger('BLD')
+    logger.fatal("data set of size %s is larger than 100w" % n)
+
+
+def build_flann_index(index_file, para_file, feature_data, force=False):
     """
     尝试加载索引文件，如果不存在，就根据feature文件进行build。
     """
@@ -66,9 +81,10 @@ def build_flann_index(index_file, para_file, feature_data, force=False, algorith
             params = json.load(open(para_file))
         logger.info("[%s] load index file %s and para file %s" % (t.elapsed, index_file, para_file))
     else:
+        n = len(feature_data)
+        para_input = _pick_flann_para(n, FLANN_BUILD_INDEX_PARA)
         with Timer() as t:
-            params = flann.build_index(feature_data, algorithm='autotuned', target_precision=0.9, build_weight=0.01,
-                                       memory_weight=0.01, sample_fraction=0.01)
+            params = flann.build_index(feature_data, *para_input)
             json.dump(params, open(para_file, 'w'))
             flann.save_index(index_file)
         logger.info("[%s] build index file %s by flann with paras %s " % (t.elapsed, index_file, params))
@@ -340,7 +356,8 @@ def prepare_twitter_info_with_feature(info_file, feature_file, info_data_raw, fo
 
     with Timer() as t:
         feature_data = feature_data_raw[:i_valid]
-        np.savetxt(feature_file, feature_data, fmt="%.4f", delimiter="\t")
+        if IS_DUMP_TXT_FEATURE:
+            np.savetxt(feature_file, feature_data, fmt="%.4f", delimiter="\t")
         np.save(feature_file_npy, feature_data)
         twitter_info.save(info_file)
     logger.info(
@@ -349,8 +366,17 @@ def prepare_twitter_info_with_feature(info_file, feature_file, info_data_raw, fo
     return twitter_info, feature_data
 
 
-def stat_shop_group_info(shop_group_file, group, twitter_info, force=False):
-    """统计店家商品中重复的比例"""
+def stat_shop_group_info(shop_group_file, category_names, group_categories, twitter_info_categories, force=False):
+    """
+    统计店家商品中重复的比例
+    返回数据结构：
+    shop_info = {'12305': [all, same1, same1_score, same2, same2_score]}
+    all 表示店内商品数量
+    same1表示全局同款的数量
+    same2表示店内同款的数量
+    same1_score表示全局同款恶劣程度，以同款组的规模来考虑 log(group_size)
+    same2_socre表示店内同款的恶劣程度， 以同款组规模考虑 (group_size -1)/group_size
+    """
 
     logger = setup_logger('BLD')
     
@@ -358,22 +384,117 @@ def stat_shop_group_info(shop_group_file, group, twitter_info, force=False):
         logger.info("shop stat file %s is ready" % (shop_group_file))
         return True
 
+
+    shop_info = {}
     with Timer() as t:
-        twitter_data = twitter_info.get_data()
-        shop_info = {}
-        n = len(twitter_data)
-        for i in xrange(n):
-            tid, goods_id, shop_id, category, url = twitter_data[i]
-            if shop_id not in shop_info:
-                shop_info[shop_id] = [0, 0]
-            shop_info[shop_id][1] += 1
-            if group.get_group(i) is not None:
+        for c_name in category_names:
+            twitter_info = twitter_info_categories[c_name]
+            twitter_data = twitter_info.get_data()
+
+            # 每个店铺的商品总量 all
+            for line in twitter_data:
+                tid, goods_id, shop_id, category, url = line
+                if shop_id not in shop_info:
+                    shop_info = [0, 0, 0, 0, 0]
                 shop_info[shop_id][0] += 1
 
+            # 各种同款分值
+            group = group_categories[c_name]
+            for group_pos in group.get_group_list():
+                group_set = group.get_group(group_pos)
+
+                # 统计一个同款组内， 不同店铺的同款数量
+                shop_info_local = {}
+                for idx in group_set:
+                    tid, goods_id, shop_id, category, url = twitter_data[idx]
+                    if shop_id not in shop_info_local:
+                        shop_info_local[shop_id] = set()
+                    shop_info_local[shop_id].append(tid)
+
+                # 将shop_info_local合并到shop_info
+                same1_score = math.log(len(group_set))
+                for shop_id, shop_group_set in shop_info_local.iteritems():
+                    n = len(shop_group_set)
+                    shop_info[shop_id][1] += n
+                    shop_info[shop_id][2] += n*same1_score
+
+                    if n > 1:
+                        shop_info[shop_id][3] += n
+                        shop_info[shop_id][4] += (n-1)  # n* ((n-1)/n)
+
         with open(shop_group_file, 'w') as fh:
+            print >> fh, "\t".join(["shop_id", "all", 'same1', 'same1_score', 'same1_ratio', 'same2', 'same2_score', 'same2_ratio'])
             for k, v in shop_info.iteritems():
-                print "%s\t%s\t%s\t%s"(k, v[0], v[1], float(v[0]) / v[1])
-    logger.info("[ %s ] calc the duplicated image for every shop in %s" % (t.elapsed, shop_group_file))
+                print "\t".join(map(str, (k, v[0], v[1], v[2], float(v[2]) / v[0], v[3], v[4], float(v[3])/v[4])))
+
+    logger.info("[ %s ] calc the duplicated image for every shop in file %s" % (t.elapsed, shop_group_file))
+
+
+def build_pipeline_with_twitter_info_raw(twitter_info_raw, data_dir, force=False):
+    """
+    @param twitter_info_raw:  未经提取特征，未经分类的原始twitter信息
+    @param data_dir:  输出文件目录
+    @return:
+    """
+
+    category_names = map(lambda x: x['name'], GOODS_CATEGORY)
+    distance_thresholds = {}
+    for category in GOODS_CATEGORY:
+        name = category['name']
+        threshold = category['threshold']
+        distance_thresholds[name] = threshold
+
+
+    info_data_raw = twitter_info_raw.get_data()
+    info_data_raw_categories = {}
+    for line in info_data_raw:
+        tid, gid, shop_id, catalog_id, img_url = line
+        name = catalog_id_to_name(catalog_id)
+        if name not in info_data_raw_categories:
+            info_data_raw_categories[name] = []
+        info_data_raw_categories[name].append(line)
+
+    twitter_info_categories = {}
+    feature_data_categories = {}
+    for c_name in category_names:
+        twitter_info_file = data_dir + '/%s_twitter_info' % c_name
+        feature_file = data_dir + '/%s_feature_data' % c_name
+        twitter_info, feature_data = prepare_twitter_info_with_feature(twitter_info_file, feature_file,
+                                                                       info_data_raw_categories[c_name],
+                                                                       force=force)
+        twitter_info_categories[c_name] = twitter_info
+        feature_data_categories[c_name] = feature_data
+
+    flann_categories = {}
+    flann_para_categories = {}
+    for c_name in category_names:
+        index_file = data_dir + '/%s_flann_index' % c_name
+        index_para_file = data_dir + '/%s_flann_index_para' % c_name
+        feature_data = feature_data_categories[c_name]
+        flann, params = build_flann_index(index_file, index_para_file, feature_data, force=force)
+        flann_categories[c_name] = flann
+        flann_para_categories[c_name] = params
+
+    group_categories = {}
+    for c_name in category_names:
+        group_pickle_file = data_dir + '/%s_group_pickle' % c_name
+        group_dump_tid2group = data_dir + '/%s_group_dump_tid2group' % c_name
+        group_dump_group2tid = data_dir + '/%s_group_dump_group2tid' % c_name
+        twitter_info = twitter_info_categories[c_name]
+        feature_data = feature_data_categories[c_name]
+        flann = flann_categories[c_name]
+        params = flann_para_categories[c_name]
+
+        group = build_group_index(group_pickle_file, group_dump_tid2group, group_dump_group2tid,
+                                  twitter_info, feature_data, flann, params, threshold=distance_thresholds[c_name],
+                                  algorithm='xnn_simple', force=force)
+        group_categories[c_name] = group
+
+    shop_group_file = data_dir + '/shop_group_stat'
+    shop_stat = stat_shop_group_info(shop_group_file, category_names,
+                                     group_categories, twitter_info_categories, force=force)
+
+    return shop_stat
 
 if __name__=='__main__':
     raise Exception("do not run it directly.")

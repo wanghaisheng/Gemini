@@ -62,7 +62,6 @@ def get_twitter_info_by_hive(fn, date):
     """
     根据商品基本信息表(goods_info_new)和 审核表（twitter_verify_operation), 获得需要建库的所有商品信息。
     """
-
     hive_out = os.path.dirname(fn) + '/hive_out'
     if os.path.exists(hive_out):
         logger.info("remove hive output dir %s" % hive_out)
