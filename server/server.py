@@ -6,10 +6,11 @@
  Purpose:
      1. 提供同款检测服务的http server
      2. http://server/result接口
-         2.1 输入： [
+         2.1 输入： {'data':[
                       {'twitter_id': 13345, 'goods_id'：1345, 'shop_id'： 123 'category':'shoes', 'img_url':'/pic/afsfdsf.jpg'} ,
                       {'twitter_id': 13377, 'goods_id'：1347,                 'category':'clothes', 'img_url':'/pic/dsfjsldflads.jpg'}
-                   ]
+                      ];
+                      'method':'group'}
          2.2 输出： [
                      { 'twitter_id': 13345, 'group_id': 13345, 'neighbors': [ 12346, 12235, 12266] } ,
                      { 'twitter_id': 13345, 'group_id': -1} ,
@@ -20,7 +21,7 @@
 """
 
 import os
-import os.path
+import sys
 from argparse import ArgumentParser
 import time
 import logging
@@ -36,32 +37,36 @@ import tornado.options
 import tornado.web
 import numpy as np
 
+sys.path.append(os.path.dirname(__file__)+'/../')
 from samelib.index import Index
 from samelib.twitter import TwitterInfo
-from samelib.utils import setup_logger
+from samelib.utils import setup_logger, get_feature_db
+from samelib.config import Config
 from feature.feature import download_and_compute_feature
 
 # from tornado.options import define, options
-define("port", default=8081, help="run on the given port", type=int)
+# define("port", default=8081, help="run on the given port", type=int)
 
 conf = Config('./conf/build.yaml')
 
 
 WORK_BASE_PATH = conf['WORK_BASE_PATH']
-LOG_FILE = WORK_BASE_PATH + '/log/build_daily.log'
+LOG_FILE = WORK_BASE_PATH + '/log/server.log'
+LOG_LEVEL = logging.DEBUG
 DATA_PATH = WORK_BASE_PATH + '/data/index_day'
 FEATURE_DB_PATH = WORK_BASE_PATH + '/data/feature_all_leveldb'
 
 IMAGE_FEATURE_DIM = conf['IMAGE_FEATURE_DIM']
 
 GOODS_CATEGORY = ["clothes", "shoes", "bag", "acc", "other"]
-LOG_LEVEL = logging.DEBUG
-LOG_FILE = 'server.log'
 
-RT_INDEX_DIR = os.path.dirname(__file__) + './rt_index_dir'
+
+
+RT_INDEX_DIR = os.path.dirname(__file__) + '/rt_index_dir'
 IMAGE_SERVER = 'http://imgst.meilishuo.net'
 PROCESS_NUM = 8  # 同时工作的进程数
 NEIGHBOR_NUM = 10   # 最多的同款数量
+SERVER_PORT = conf['SERVER_PORT']
 CATEGORY_THRESHOLD = {
     'clothes': 0.1089,
     'shoes': 0.09,
@@ -74,7 +79,7 @@ RT_INDEX_MIN = 300
 
 
 
-logger = setup_logger('SVR')
+logger = setup_logger('SVR', LOG_FILE, LOG_LEVEL)
 
 class IndexHandler(tornado.web.RequestHandler):
     def get(self):
@@ -83,10 +88,10 @@ class IndexHandler(tornado.web.RequestHandler):
 
 class ExitHandler(tornado.web.RequestHandler):
     def initialize(self):
-        self._
+        self._key = 'UkoJRlAIxsCNlAWO'
 
-    def get(self):
-        TODO:
+    def post(self):
+        # TODO 优雅关闭
         # 保存实时索引的数据
         pass
 
@@ -260,8 +265,14 @@ class ResultPageHandler(tornado.web.RequestHandler):
         """
         input json for post request:
         """
-        TODO
-        reqs = self.get_argument('twitter_list', default="010").encode('utf-8')
+
+        import pdb
+        pdb.set_trace()
+        method = self.get_argument('method')
+        if method != 'group':
+            return json.dumps({'status': 1, 'message': 'bad method', 'data':[]})
+            
+        reqs = json.loads(self.get_argument('data', '[]'))
 
         twitter_info_raw = self._map_req_to_twitter_info(reqs)
         feature_data, twitter_info, result_set = self._get_features(twitter_info_raw)
@@ -316,47 +327,47 @@ class ResultPageHandler(tornado.web.RequestHandler):
 
 
 class Application(tornado.web.Application):
-"""
-TODO: 将server改为多进程，提高并发的响应。
-"""
-def __init__(self, base_dir, daily_dir, leveldb=None):
-    handles = [
-        (r'/', IndexHandler),
-        (r'/result', ResultPageHandler),
-        (r'/exit', ExitHandler)
-    ]
-    settings = dict(
-        template_path=os.path.join(os.path.dirname(__file__), 'templates'),
-        static_path=os.path.join(os.path.dirname(__file__),'static'),
-        debug=True,
-    )
-    tornado.web.Application.__init__(self,handles,**settings)
-
-    # 加载大库
-    with Timer() as t:
-        index1 = Index()
-        index1.load(base_dir)
-    logger.info("[%s] loading base index data in %s . " % (t.elapsed, base_dir))
-
-    # 加载天级库
-    with Timer() as t:
-        index2 = Index()
-        index2.load(daily_dir)
-    logger.info("[%s] loading daily index data in %s . " % (t.elapsed, daily_dir))
-
-
-    # 加载实时库
-    with Timer() as t:
-        index3 = Index()
-        index3.load(RT_INDEX_DIR)
-    logger.info("[%s] loading daily index data in %s . " % (t.elapsed, RT_INDEX_DIR))
-
-    self.index_base = index1
-    self.index_daily = index2
-    self.index_rt = index3
-
-    self.feature_db = leveldb.LevelDB(FEATURE_DB_PATH)
-    self.workers = multiprocessing.Pool(PROCESS_NUM)
+    """
+    TODO: 将server改为多进程，提高并发的响应。
+    """
+    def __init__(self, base_dir, daily_dir, leveldb=None):
+        handles = [
+            (r'/', IndexHandler),
+            (r'/result', ResultPageHandler),
+            (r'/exit', ExitHandler)
+        ]
+        settings = dict(
+            template_path=os.path.join(os.path.dirname(__file__), 'templates'),
+            static_path=os.path.join(os.path.dirname(__file__),'static'),
+            debug=True,
+        )
+        tornado.web.Application.__init__(self,handles,**settings)
+    
+        # 加载大库
+        with Timer() as t:
+            index1 = Index()
+            index1.load(base_dir)
+        logger.info("[%s] loading base index data in %s . " % (t.elapsed, base_dir))
+    
+        # 加载天级库
+        with Timer() as t:
+            index2 = Index()
+            index2.load(daily_dir)
+        logger.info("[%s] loading daily index data in %s . " % (t.elapsed, daily_dir))
+    
+    
+        # 加载实时库
+        with Timer() as t:
+            index3 = Index()
+            index3.load(RT_INDEX_DIR)
+        logger.info("[%s] loading daily index data in %s . " % (t.elapsed, RT_INDEX_DIR))
+    
+        self.index_base = index1
+        self.index_daily = index2
+        self.index_rt = index3
+    
+        self.feature_db = get_feature_db(FEATURE_DB_PATH)
+        self.workers = multiprocessing.Pool(PROCESS_NUM)
 
 def parse_args():
     """
@@ -367,16 +378,16 @@ def parse_args():
     TODO: 在config目录提供相应配置，根据tornado.options进行解析
     """
     parser = ArgumentParser(description='图片同款检测服务的http server.')
-    parser.add_argument("--port", metavar='PORT', type=int, default=8081, help="server port.")
-    parser.add_argument("--basedir", metavar='BASE_DIR', help="path to base index files.")
-    parser.add_argument("--daydir", metavar='DAY_DIR', help="path to daily index files.")
+    parser.add_argument("basedir", metavar='BASE_DIR', help="path to base index files.")
+    parser.add_argument("daydir", metavar='DAY_DIR', help="path to daily index files.")
+    parser.add_argument("--port", metavar='PORT', type=int, default=SERVER_PORT, help="server port. default %s" % SERVER_PORT )
     args = parser.parse_args()
     return args
 
 #----------------------------------------------------------------------
 def main(args):
     # tornado.options.parse_command_line()
-    http_server = tornado.httpserver.HTTPServer(Application(args.dir))
+    http_server = tornado.httpserver.HTTPServer(Application(args.basedir, args.daydir))
     # http_server.listen(options.port)
     http_server.listen(args.port)
     tornado.ioloop.IOLoop.instance().start()

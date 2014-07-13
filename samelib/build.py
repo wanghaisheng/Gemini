@@ -29,7 +29,7 @@ import leveldb
 from samelib.utils import setup_logger
 from samelib.config import Config
 from samelib.twitter import TwitterInfo
-from samelib.utils import try_load_npy
+from samelib.utils import try_load_npy, get_feature_db
 from feature.feature import download_and_compute_feature
 from samelib.group import Group
 
@@ -38,7 +38,6 @@ conf = Config('./conf/build.yaml')
 LOG_LEVEL = logging.DEBUG
 
 WORK_BASE_PATH = conf['WORK_BASE_PATH']
-LOG_FILE = WORK_BASE_PATH + '/log/build_daily.log'
 DATA_PATH = WORK_BASE_PATH + '/data/index_day'
 FEATURE_DB_PATH = WORK_BASE_PATH + '/data/feature_all_leveldb'
 
@@ -50,14 +49,15 @@ IMAGE_SERVER = 'http://imgst.meilishuo.net'
 GROUPING_DISTANCE = 0.09  # 平方距离（欧式距离平方）阈值。不区分类别时取0.3*0.3
 NUM_NEIGHBORS = 10  #
 
-logger = setup_logger('BLD', LOG_FILE, LOG_LEVEL)
-db = leveldb.LevelDB(FEATURE_DB_PATH)
+# logger = setup_logger('BLD')
+# db = leveldb.LevelDB(FEATURE_DB_PATH)
 
 
 def build_flann_index(index_file, para_file, feature_data, force=False, algorithm='autotuned'):
     """
     尝试加载索引文件，如果不存在，就根据feature文件进行build。
     """
+    logger = setup_logger('BLD')
 
     flann = FLANN()
     if os.path.exists(index_file) and not force:
@@ -79,6 +79,9 @@ def build_flann_index(index_file, para_file, feature_data, force=False, algorith
 def build_group_index(group_pickle_file, group_dump_tid2group, group_dump_group2tid, twitter_info, feature_data, flann,
                       params,
                       threshold, algorithm='xnn_simple', force=False):
+
+    logger = setup_logger('BLD')
+    
     group = Group()
     if not force and (os.path.exists(group_pickle_file)):
         with Timer() as t:
@@ -119,6 +122,7 @@ def build_group_xnn_simple(twitter_info, feature_data, flann, params, threshold)
     2. 另外一个思路，是考虑n个近邻中，隶属元素最多的同款组。
 
     """
+    logger = setup_logger('BLD')
 
     # twitter用feature data中的pos表示
     pos2groupid = {}  # {10:5, 20:5}
@@ -263,6 +267,8 @@ def prepare_twitter_info_with_feature(info_file, feature_file, info_data_raw, fo
     TODO： 下载图片数据计算特征很耗时，比较适合可以利用多线程or多进程进行并行化。
     """
 
+    logger = setup_logger('BLD')
+
     feature_file_npy = feature_file + '.npy'
 
     twitter_info = TwitterInfo()
@@ -276,6 +282,7 @@ def prepare_twitter_info_with_feature(info_file, feature_file, info_data_raw, fo
     n_raw = len(info_data_raw)
     feature_data_raw = np.zeros((n_raw, IMAGE_FEATURE_DIM))
     # db = leveldb.LevelDB(FEATURE_DB_PATH)
+    db = get_feature_db(FEATURE_DB_PATH)
 
     # feature数据可能从db中查询，也可能下载。db_hit表示命中查询， db_miss表示需要下载计算。
     # t表示总量， i表示每个子集（比如每1000）的数量。
@@ -344,6 +351,9 @@ def prepare_twitter_info_with_feature(info_file, feature_file, info_data_raw, fo
 
 def stat_shop_group_info(shop_group_file, group, twitter_info, force=False):
     """统计店家商品中重复的比例"""
+
+    logger = setup_logger('BLD')
+    
     if not force and os.path.exists(shop_group_file):
         logger.info("shop stat file %s is ready" % (shop_group_file))
         return True

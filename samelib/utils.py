@@ -17,6 +17,8 @@ import logging
 import numpy as np
 import scipy.spatial
 
+import leveldb
+
 # from config import Config
 # conf = Config('../conf/build.yaml')
 
@@ -62,22 +64,32 @@ def try_load_npy(fn):
     return ret
 
 
-def setup_logger(name, fn, level):
+def setup_logger(name, fn=None, level=logging.DEBUG):
 
     logger = logging.getLogger(name)
     logger.setLevel(level)
-    formatter = logging.Formatter("%(asctime)s-[%(name)s]-[%(levelname)s]: %(message)s")
+    if not logger.handlers:
+        formatter = logging.Formatter("%(asctime)s-[%(name)s]-[%(levelname)s]: %(message)s")
 
-    handler = logging.FileHandler(fn)
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-
-    if 1 : # if conf['IS_PRINT_LOG_TO_SCREEN']:
-        handler = logging.StreamHandler(sys.stderr)
+        handler = logging.FileHandler(fn)
         handler.setFormatter(formatter)
         logger.addHandler(handler)
 
+        if 1 : # if conf['IS_PRINT_LOG_TO_SCREEN']:
+            handler = logging.StreamHandler(sys.stderr)
+            handler.setFormatter(formatter)
+            logger.addHandler(handler)
+
     return logger
+
+dbs = {}
+def get_feature_db(path):
+    if path not in dbs:
+        dbs[path] = leveldb.LevelDB(path)
+        return dbs[path]
+    else:
+        return dbs[path]
+    
 
 def flat2list(fn, sep="\t", header=0):
     res = []

@@ -26,6 +26,8 @@ import scipy
 from pyflann import FLANN
 import leveldb
 
+
+
 from samelib.utils import setup_logger
 from samelib.config import Config
 from samelib.twitter import TwitterInfo
@@ -43,6 +45,7 @@ WORK_BASE_PATH = conf['WORK_BASE_PATH']
 LOG_FILE = WORK_BASE_PATH + '/log/build_daily.log'
 DATA_PATH = WORK_BASE_PATH + '/data/index_day'
 FEATURE_DB_PATH = WORK_BASE_PATH + '/data/feature_all_leveldb'
+HIVE_PATH       = conf['HIVE_PATH']
 
 IMAGE_FEATURE_DIM = conf['IMAGE_FEATURE_DIM']
 
@@ -53,19 +56,11 @@ GROUPING_DISTANCE = 0.09  # 平方距离（欧式距离平方）阈值。不区�
 NUM_NEIGHBORS = 10  #
 
 logger = setup_logger('BLD', LOG_FILE, LOG_LEVEL)
-db = leveldb.LevelDB(FEATURE_DB_PATH)
 
 
-def get_twitter_info_by_hive(fn, start):
+def get_twitter_info_by_hive(fn, date):
     """
     根据商品基本信息表(goods_info_new)和 审核表（twitter_verify_operation), 获得需要建库的所有商品信息。
-    sqoops定时每天凌晨从stat库导出sell_pool， 但sell_pool每天8点左右数据才ok，所以昨天的数据是有问题的。根据小库补救一下。
-    基本信息表中的catalog是商品侧的，与t_dolphin_catalog_goods_map完全不一样。
-
-    @param fn: hive输出文件名
-    @param start: datetime对象，时间起点
-    @param end 　: datetime对象， 时间终点
-    @param pv    : 展现频次阈值
     """
 
     hive_out = os.path.dirname(fn) + '/hive_out'
@@ -74,22 +69,25 @@ def get_twitter_info_by_hive(fn, start):
         os.removedirs(hive_out)
     os.makedirs(hive_out)
 
+    date_string = date.strftime("%Y-%m-%d %H:%M:%S")
+
     hql = """
      set hive.exec.compress.output=false;
+     set mapred.reduce.tasks=1;
      insert overwrite local directory '%(hive_out)s'
+     row format delimited  FIELDS TERMINATED BY '\t'
      select A.twitter_id, A.goods_id, A.shop_id, B.catalog_id, A.goods_img from
-     ( select twitter_id, goods_id, shop_id, goods_img,
-       from ods_brd_shop_goods_info
-       where goods_status=1 )
+     ( select twitter_id, goods_id, shop_id, goods_img
+       from ods_brd_shop_goods_info)
      A join
      ( select twitter_id, catalog_id
        from ods_dolphin_twitter_verify_operation
-       where dt > %(dates)s
+       where op_date >= unix_timestamp('%(dates)s')
     )
-    B on (A.twitter_id = B.twitter_id) ; """ % {'dates': days_string, 'hive_out': hive_out}
+    B on (A.twitter_id = B.twitter_id) ; """ % {'dates': date_string, 'hive_out': hive_out}
     cmds = [HIVE_PATH + '/hive', '-e', hql.replace("\n", "")]
 
-    logger.info("execute hive with date in (%s) with %s" % (days_string, " ".join(cmds)))
+    logger.info("execute hive with date in (%s) with %s" % (date_string, " ".join(cmds)))
 
     with Timer() as t:
         ps = subprocess.Popen(cmds, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -100,7 +98,7 @@ def get_twitter_info_by_hive(fn, start):
     if ps.returncode != 0:
         sys.exit(1)
 
-    cmds = ["sed 's/\x01/\x09/g' %s/0* > %s" % (hive_out, fn)]
+    cmds = ["cat %s/0* > %s" % (hive_out, fn)]
     with Timer() as t:
         ps = subprocess.Popen(cmds, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
         ps.wait()
@@ -112,12 +110,12 @@ def get_twitter_info_by_hive(fn, start):
     return True
 
 
-def prepare_twitter_raw_info(info_file, start, end, pv, base_info_file=None, force=False):
+def prepare_twitter_raw_info(info_file, date, force=False):
     """ """
     twitter_info = TwitterInfo()
 
     if force or not os.path.exists(info_file):
-        get_twitter_info_by_hive(info_file, start, end)
+        get_twitter_info_by_hive(info_file, date)
         with Timer() as t:
             twitter_info.load(info_file)
         logger.info("[%s] twitter info file %s is loaded" % (t.elapsed, info_file))
@@ -134,7 +132,7 @@ def main(args):
     """
     """
 
-    data_dir = DATA_PATH + '/daily_%s_%s' % (args.date.strftime("%Y%m%d"))
+    data_dir = DATA_PATH + '/daily_%s' % (args.date.strftime("%Y%m%d"))
     if not os.path.exists(data_dir):
         os.makedirs(data_dir)
     logger.info("==================== start %s daily build %s ======================" % (args.date.strftime("%Y%m%d"), data_dir))
@@ -164,16 +162,14 @@ def parse_args():
     args = parser.parse_args()
 
     if args.date is None:
-        yesterday = datetime.date.today() - datetime.timedelta(days=1)
-        args.date = yesterday
+        args.date = datetime.date.today()
     else:
         args.date = datetime.datetime.strptime(args.date, "%Y-%m-%d")
 
-    args.dates = []
     cur = args.date
-    while cur.isoweekday() != 'saturday':
-        args.dates.append(cur)
+    while cur.isoweekday() != 7: # 最近一个周日
         cur -= datetime.timedelta(days=1)
+    args.date = cur 
 
     return args
 

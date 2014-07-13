@@ -1,5 +1,6 @@
 # WORK_BASE_PATH  :  /home/work/Gemini
-WORK_BASE_PATH  :  /home/work/taopeng/projects/20140529-detect-same-items/new-Gemini/Gemini
+# WORK_BASE_PATH  :  /home/work/taopeng/projects/20140529-detect-same-items/new-Gemini/Gemini
+WORK_BASE_PATH  :  /home/work/taopeng/projects/20140529-detect-same-items/test-Gemini-run/
 
 MIN_SHOW_PV     :  5 # twitter多天展现均值（中值）超过次阈值，则进入索引候选集
 
@@ -18,6 +19,7 @@ HIVE_PATH : /hadoop/hive/bin   # hive的路径
 
 IMAGE_FEATURE_DIM : 960       # 图片提取特征的维数
 
+SERVER_PORT       : 8773
 
 
 
