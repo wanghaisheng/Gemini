@@ -131,8 +131,11 @@ def main(args):
     """
     """
 
-    data_dir = DATA_PATH + '/daily_%s' % (args.date.strftime("%Y%m%d"))
+    data_dir = DATA_PATH + '/daily_from_%s' % (args.date.strftime("%Y%m%d"))
     if not os.path.exists(data_dir):
+
+
+        
         os.makedirs(data_dir)
     logger.info("==================== start %s daily build %s ======================" % (args.date.strftime("%Y%m%d"), data_dir))
 

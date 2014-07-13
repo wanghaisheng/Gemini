@@ -50,7 +50,7 @@ FLANN_BUILD_INDEX_PARA = conf['FLANN_BUILD_INDEX_PARA']
 GOODS_CATEGORY = conf['GOODS_CATEGORY']
 
 ITER_RANGE = 1000  # 图片加载计算特征，每100个输出一次状态。
-ITER_RANGE2 = 100  # 同款组聚类，每500个完成一次输出。
+ITER_RANGE2 = 1000  # 同款组聚类，每500个完成一次输出。
 IMAGE_SERVER = 'http://imgst.meilishuo.net'
 NUM_NEIGHBORS = 10  #
 
@@ -222,7 +222,80 @@ def build_group_xnn_simple(twitter_info, feature_data, flann, params, threshold)
     return pos2groupid, groupid2pos
 
 
-def _find_and_sort_neighbor(neighbors, distances, threshold):
+def build_group_xnn_with_reference(twitter_info, feature_data, flann, params, group_ref,
+                                   twitter_info_ref, feature_data_ref, flann_ref, params_ref, threshold):
+    """
+    build_group_xnn_simple算法的扩展。 在聚类的时候，优先考虑加入reference中的已有类别。
+
+    TODO: 算法过于复杂，没有开发完成。
+
+    """
+    logger = setup_logger('BLD')
+
+    # twitter用feature data中的pos表示
+    pos2groupid = {}  # {10:5, 20:5}
+    groupid2pos = {}  # {5:set(5, 10, 20)}
+
+    #   TODO： 有很多twitter的图片在物理上是一张图，所以将所有图片完全一样的twitter，作为聚类的种子。
+
+    with Timer() as t:
+        # 目标集合和ref集合的最近邻
+        neighbors, distances = flann_ref.nn_index(feature_data, num_neighbors=NUM_NEIGHBORS, **params_ref)
+    logger.info("[%s] query all %s points with %s nearest neighbors against reference index" % (t.elapsed, len(feature_data), NUM_NEIGHBORS))
+
+    with Timer() as t:
+        order_positions, order_neighbors, order_distances = _find_and_sort_neighbor(neighbors, distances, threshold, exclude_self=False)
+        n = len(order_positions)
+    logger.info("[%s] %s points with neighbors in the threshold %s are sorted" % (t.elapsed, threshold, n))
+
+    now = time.time()
+    s_t, e_t, s_i, e_i = now, now, now, now
+    for i in xrange(n):
+        if i % ITER_RANGE2 == 0:
+            e_i = time.time()
+            logger.debug(" [%s] %s points has been clustered" % (e_i - s_i, i))
+            s_i = e_i
+
+        point = order_positions[i]
+
+        # if point in (4232,30124,35934,42950,6071):
+        # import pdb
+        # pdb.set_trace()
+
+        # point已经被其他最近邻纳入某个同款组。 风险：当前最近邻不能发挥作用。
+        if point in pos2groupid:
+            continue
+        members = order_neighbors[i]
+        m = len(members)
+        checked_group = []
+        is_grouped = False
+        j = 0
+        while not is_grouped and j < m:
+            nn = members[j]
+            j += 1
+            groupid = pos2groupid.get(nn)
+            if groupid is not None:
+                if groupid not in checked_group:
+                    cur_group = groupid2pos[groupid]
+                    if _is_insert_current_group(cur_group, point, feature_data, threshold):
+                        cur_group.add(point)
+                        pos2groupid[point] = groupid
+                        is_grouped = True
+                    checked_group.append(groupid)
+                else:
+                    pass  # 当前近邻所属同款组，在其他近邻所属同款组时已经检查过了。
+            else:
+                groupid2pos[point] = {point, nn}
+                pos2groupid[nn] = point
+                pos2groupid[point] = point
+                is_grouped = True
+
+    e_t = time.time()
+    logger.info("[ %s ] clustering all points into group is done" % (e_t - s_t))
+    return pos2groupid, groupid2pos
+
+
+def _find_and_sort_neighbor(neighbors, distances, threshold, exclude_self=True):
     """
      从nn_index产出的数据中，产生近邻， 按照最近邻距离排序。
     """
@@ -242,9 +315,11 @@ def _find_and_sort_neighbor(neighbors, distances, threshold):
         gaps = gaps[:j]
 
         # 自身不算最近邻
-        idx = filter(lambda x: members[x] != i, range(j))
-        members = map(lambda x: members[x], idx)
-        gaps = map(lambda x: gaps[x], idx)
+        if exclude_self:
+            idx = filter(lambda x: members[x] != i, range(j))
+            members = map(lambda x: members[x], idx)
+            gaps = map(lambda x: gaps[x], idx)
+
 
         if members:
             threshold_pair.append((i, members, gaps))
