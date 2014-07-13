@@ -195,7 +195,7 @@ def catalog_id_to_name(catalog_id):
         for ele in GOODS_CATEGORY:
             _catalog_id_rules.append((ele['prefix'], ele['name']))
     for rule in _catalog_id_rules:
-        if catalog_id.starswith(rule[0]):
+        if catalog_id.startswith(rule[0]):
             return rule[1]
     return 'error'
 

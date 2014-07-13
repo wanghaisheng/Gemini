@@ -84,7 +84,7 @@ def build_flann_index(index_file, para_file, feature_data, force=False):
         n = len(feature_data)
         para_input = _pick_flann_para(n, FLANN_BUILD_INDEX_PARA)
         with Timer() as t:
-            params = flann.build_index(feature_data, *para_input)
+            params = flann.build_index(feature_data, **para_input)
             json.dump(params, open(para_file, 'w'))
             flann.save_index(index_file)
         logger.info("[%s] build index file %s by flann with paras %s " % (t.elapsed, index_file, params))
@@ -387,7 +387,8 @@ def stat_shop_group_info(shop_group_file, category_names, group_categories, twit
 
     shop_info = {}
     with Timer() as t:
-        for c_name in category_names:
+        # 极端条件下，某些类别没有twitter，没有group数据
+        for c_name in group_categories:
             twitter_info = twitter_info_categories[c_name]
             twitter_data = twitter_info.get_data()
 
@@ -395,13 +396,13 @@ def stat_shop_group_info(shop_group_file, category_names, group_categories, twit
             for line in twitter_data:
                 tid, goods_id, shop_id, category, url = line
                 if shop_id not in shop_info:
-                    shop_info = [0, 0, 0, 0, 0]
+                    shop_info[shop_id] = [0, 0, 0, 0, 0]
                 shop_info[shop_id][0] += 1
 
             # 各种同款分值
             group = group_categories[c_name]
             for group_pos in group.get_group_list():
-                group_set = group.get_group(group_pos)
+                group_set = group.get_member(group_pos)
 
                 # 统计一个同款组内， 不同店铺的同款数量
                 shop_info_local = {}
@@ -409,7 +410,7 @@ def stat_shop_group_info(shop_group_file, category_names, group_categories, twit
                     tid, goods_id, shop_id, category, url = twitter_data[idx]
                     if shop_id not in shop_info_local:
                         shop_info_local[shop_id] = set()
-                    shop_info_local[shop_id].append(tid)
+                    shop_info_local[shop_id].add(tid)
 
                 # 将shop_info_local合并到shop_info
                 same1_score = math.log(len(group_set))
@@ -425,7 +426,7 @@ def stat_shop_group_info(shop_group_file, category_names, group_categories, twit
         with open(shop_group_file, 'w') as fh:
             print >> fh, "\t".join(["shop_id", "all", 'same1', 'same1_score', 'same1_ratio', 'same2', 'same2_score', 'same2_ratio'])
             for k, v in shop_info.iteritems():
-                print "\t".join(map(str, (k, v[0], v[1], v[2], float(v[2]) / v[0], v[3], v[4], float(v[3])/v[4])))
+                print >>fh, "\t".join(map(str, (k, v[0], v[1], v[2], float(v[2]) / v[0], v[3], v[4], float(v[4])/v[0])))
 
     logger.info("[ %s ] calc the duplicated image for every shop in file %s" % (t.elapsed, shop_group_file))
 
@@ -444,11 +445,19 @@ def build_pipeline_with_twitter_info_raw(twitter_info_raw, data_dir, force=False
         threshold = category['threshold']
         distance_thresholds[name] = threshold
 
+    info_data_raw_categories = {}
+    for name in category_names:
+        info_data_raw_categories[name] = []
 
     info_data_raw = twitter_info_raw.get_data()
-    info_data_raw_categories = {}
     for line in info_data_raw:
-        tid, gid, shop_id, catalog_id, img_url = line
+        
+        if len(line) == 5:
+            # img_url字段不完整，比如 select * from brd_shop_goods_info_new where twitter_id = 2968549481;
+            tid, gid, shop_id, catalog_id, img_url = line
+        else:
+            continue
+
         name = catalog_id_to_name(catalog_id)
         if name not in info_data_raw_categories:
             info_data_raw_categories[name] = []
@@ -477,6 +486,12 @@ def build_pipeline_with_twitter_info_raw(twitter_info_raw, data_dir, force=False
 
     group_categories = {}
     for c_name in category_names:
+        twitter_info = twitter_info_categories[c_name]
+        feature_data = feature_data_categories[c_name]
+        
+        if not twitter_info.get_data() or feature_data.shape[0]==0:
+            continue
+
         group_pickle_file = data_dir + '/%s_group_pickle' % c_name
         group_dump_tid2group = data_dir + '/%s_group_dump_tid2group' % c_name
         group_dump_group2tid = data_dir + '/%s_group_dump_group2tid' % c_name
