@@ -34,7 +34,7 @@ from samelib.twitter import TwitterInfo
 from samelib.utils import try_load_npy
 from feature.feature import download_and_compute_feature
 from samelib.group import Group
-from samelib.build import prepare_twitter_info_with_feature, build_flann_index, build_group_index, stat_shop_group_info
+from samelib.build import prepare_twitter_info_with_feature, build_pipeline_with_twitter_info_raw
 
 
 conf = Config('./conf/build.yaml')
@@ -139,16 +139,7 @@ def main(args):
     twitter_info_raw_file = data_dir + '/twitter_info_raw'
     twitter_info_raw = prepare_twitter_raw_info(twitter_info_raw_file, args.date, force=args.force)
 
-    twitter_info_file = data_dir + '/twitter_info'
-    feature_file = data_dir + '/feature_data'
-    info_data_raw = twitter_info_raw.get_data()
-    twitter_info, feature_data = prepare_twitter_info_with_feature(twitter_info_file, feature_file, info_data_raw,
-                                                                   force=args.force)
-
-    index_file = data_dir + '/flann_index'
-    index_para_file = data_dir + '/flann_index_para'
-    flann, params = build_flann_index(index_file, index_para_file, feature_data, force=args.force,
-                                      algorithm="autotuned")
+    shop_stat = build_pipeline_with_twitter_info_raw(twitter_info_raw, data_dir, force=args.force)
 
 
 
