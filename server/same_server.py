@@ -58,7 +58,13 @@ FEATURE_DB_PATH = WORK_BASE_PATH + '/data/feature_all_leveldb'
 
 IMAGE_FEATURE_DIM = conf['IMAGE_FEATURE_DIM']
 
-GOODS_CATEGORY = ["clothes", "shoes", "bag", "acc", "other"]
+GOODS_CATEGORY = conf['GOODS_CATEGORY']
+category_names = map(lambda x:x['name'], GOODS_CATEGORY)
+category_thresholds = {}
+for category in GOODS_CATEGORY:
+    name = category['name']
+    threshold = category['threshold']
+    category_thresholds[name] = threshold
 
 
 
@@ -67,16 +73,9 @@ IMAGE_SERVER = 'http://imgst.meilishuo.net'
 PROCESS_NUM = 8  # 同时工作的进程数
 NEIGHBOR_NUM = 10   # 最多的同款数量
 SERVER_PORT = conf['SERVER_PORT']
-CATEGORY_THRESHOLD = {
-    'clothes': 0.1089,
-    'shoes': 0.09,
-    'bag':   0.1225,
-    'acc':   0.04,
-    'other': 0.09 }
 
 RT_INDEX_MAX = 1000
 RT_INDEX_MIN = 300
-
 
 
 logger = setup_logger('SVR', LOG_FILE, LOG_LEVEL)
@@ -93,7 +92,37 @@ class ExitHandler(tornado.web.RequestHandler):
     def post(self):
         # TODO 优雅关闭
         # 保存实时索引的数据
-        pass
+        index_rt = self.application.index_rt
+        index_rt.save(RT_INDEX_DIR)
+        logger.info("save the rt index %s and exit" % RT_INDEX_DIR )
+        sys.exit(0)
+
+
+def split_feature_into_categories(feature_data, twitter_info):
+    """ 将feature数据按照类目进行查分。
+    @param feature_data:
+    @param twitter_info:
+    @return:
+    """
+
+    idx_categories = {}
+    n = twitter_info.get_length()
+    twitter_data = twitter_info.get_data()
+    for i in xrange(n):
+        c_name = twitter_data[i][3]
+        if c_name not in idx_categories:
+            idx_categories[c_name] = []
+        idx_categories[c_name].append(i)
+
+    feature_data_categories = {}
+    twitter_info_categories = {}
+    for c_name, idx in idx_categories:
+        twitter_info_categories[c_name] = TwitterInfo()
+        data = map(lambda x: twitter_data[x], idx)
+        twitter_info_categories[c_name].set_data(data)
+        feature_data_categories[c_name] = feature_data[idx]
+
+    return feature_data_categories, twitter_info_categories
 
 
 class ResultPageHandler(tornado.web.RequestHandler):
@@ -196,12 +225,13 @@ class ResultPageHandler(tornado.web.RequestHandler):
 
         return twitter_info
 
-    def _filter_nn(self, nn, distances, twitter_info, index):
-        """ 符合不同类目近邻标准的提取出来，不符合的返回 feature_data 继续下一轮查询"""
+    def _filter_nn(self, nn, distances, twitter_info, twitter_data_index, threshold):
 
-        n = twitter_info.get_length()
+        """ 符合不同类目近邻标准的提取出来，不符合的返回 feature_data 继续下一轮查询"""
         result_set = []
         remain_pos = []
+
+        n = twitter_info.get_length()
         for i in xrange(n):
             members = nn[i]
             gaps = distances[i]
@@ -210,24 +240,24 @@ class ResultPageHandler(tornado.web.RequestHandler):
             m = len(members)
             j = 0
             while j < m:
-                if gaps[j] >= CATEGORY_THRESHOLD[category]:
+                if gaps[j] >= threshold:
                     break
                 j += 1
             members = members[:j]
 
-
             if members:
-                pos = members[0]
-                nn_tids = map(lambda x: index.get_tid(x), members)
-                ret = {'twitter_id':tid, 'group_id': nn_tid[0], 'neighbors':nn_tids}
+                nn_tids = map(lambda x: twitter_data_index[x][0], members)
+                ret = {'twitter_id':tid, 'group_id': nn_tids[0], 'neighbors':nn_tids}
                 result_set.append(ret)
             else:
                 remain_pos.append(i)
+
         return result_set, remain_pos
 
 
-    def _filter_nn_self(self, nn, distances, twitter_info, index, offset):
-        """ 查询包括自身在内的索引库，
+    def _filter_nn_self(self, nn, distances, twitter_info, twitter_data_index, threshold, offset):
+        """
+        查询包括自身在内的索引库，
         符合不同类目近邻标准的提取出来，不符合的返回 feature_data 继续下一轮查询"""
 
         n = twitter_info.get_length()
@@ -242,7 +272,7 @@ class ResultPageHandler(tornado.web.RequestHandler):
             j = 0
             positions = []
             while j < m:
-                if gaps[j] >= CATEGORY_THRESHOLD[category]:
+                if gaps[j] >= threshold:
                     break
                 # 自身不算，
                 if members[j] != offset + i:
@@ -251,8 +281,8 @@ class ResultPageHandler(tornado.web.RequestHandler):
 
             members = map(lambda x: members[x], positions)
             if members:
-                nn_tids = map(lambda x: index.get_tid(x), members)
-                ret = {'twitter_id': tid, 'group_id': nn_tid[0], 'neighbors': nn_tids}
+                nn_tids = map(lambda x: twitter_data_index[x][0], members)
+                ret = {'twitter_id': tid, 'group_id': nn_tids[0], 'neighbors': nn_tids}
                 result_set.append(ret)
             else:
                 remain_pos.append(i)
@@ -265,9 +295,6 @@ class ResultPageHandler(tornado.web.RequestHandler):
         """
         input json for post request:
         """
-
-        import pdb
-        pdb.set_trace()
         method = self.get_argument('method')
         if method != 'group':
             return json.dumps({'status': 1, 'message': 'bad method', 'data':[]})
@@ -277,38 +304,47 @@ class ResultPageHandler(tornado.web.RequestHandler):
         twitter_info_raw = self._map_req_to_twitter_info(reqs)
         feature_data, twitter_info, result_set = self._get_features(twitter_info_raw)
 
-        # 查询大库
-        with Timer() as t:
-            nn, distance = self._index_base.search(feature_data, neighbors=NEIGHBOR_NUM)
-            res, positions = self._filter_nn(nn, distance, twitter_info, self._index_base)
-            result_set += res
-        logger.info("<%s> [%s] find %s/%s neighbors in base index" % (
-            self._queryid, t.elapsed, len(res), twitter_info.get_length()))
+        feature_data_categories, twitter_info_categories = split_feature_into_categories(feature_data, twitter_info)
 
-        # 查询天级库
-        with Timer() as t:
-            feature_data2 = feature_data[positions]
-            twitter_info2 = TwitterInfo()
-            for pos in positions:
-                twitter_info2.append(twitter_info[pos])
-            nn, distance = self._index_daily.search(feature_data2, neighbors=NEIGHBOR_NUM)
-            res, positions = self._filter_nn(nn, distance, twitter_info2, self._index_daily)
-            result_set += res
-        logger.info("<%s> [%s] find %s/%s neighbors in daily index" % (
-            self._queryid, t.elapsed, len(res), twitter_info2.get_length()))
+        for c_name in twitter_info_categories:
+            feature_data = feature_data_categories[c_name]
+            twitter_info = twitter_info_categories[c_name]
+            threshold = category_thresholds[c_name]
+            # 查询大库
+            with Timer() as t:
+                nn, distance = self._index_base.search(c_name, feature_data, neighbors=NEIGHBOR_NUM)
+                twitter_data_index = self._index_base.get_twitter_info(c_name).get_data()
+                res, positions = self._filter_nn(nn, distance, twitter_info, twitter_data_index, threshold)
+                result_set += res
+            logger.info("<%s> [%s] find %s/%s neighbors in %s base index" % (
+                self._queryid, t.elapsed, len(res), twitter_info.get_length(), c_name))
 
-        # 查询realtime库
-        with Timer() as t:
-            feature_data3 = feature_data2[positions]
-            twitter_info3 = TwitterInfo()
-            for pos in positions:
-                twitter_info3.append(twitter_info2[pos])
-            offset = self._index_rt.append(feature_data3, twitter_info3)
-            nn, distance = self._index_rt.search(feature_data3, neighbors=NEIGHBOR_NUM)
-            res, positions = self._filter_nn_self(nn, distance, twitter_info3, self._index_rt, offset)
-            result_set += res
-        logger.info("<%s> [%s] find %s/%s neighbors in realtime index" % (
-            self._queryid, t.elapsed, len(res), twitter_info3.get_length()))
+            # 查询天级库
+            with Timer() as t:
+                feature_data2 = feature_data[positions]
+                twitter_info2 = TwitterInfo()
+                for pos in positions:
+                    twitter_info2.append(twitter_info[pos])
+                nn, distance = self._index_daily.search(c_name, feature_data2, neighbors=NEIGHBOR_NUM)
+                twitter_data_index2 = self._index_daily.get_twitter_info(c_name).get_data()
+                res, positions = self._filter_nn(nn, distance, twitter_info2, twitter_data_index2, threshold)
+                result_set += res
+            logger.info("<%s> [%s] find %s/%s neighbors in %s daily index" % (
+                self._queryid, t.elapsed, len(res), twitter_info2.get_length(), c_name))
+
+            # 查询realtime库
+            with Timer() as t:
+                feature_data3 = feature_data2[positions]
+                twitter_info3 = TwitterInfo()
+                for pos in positions:
+                    twitter_info3.append(twitter_info2[pos])
+                offset = self._index_rt.insert(c_name, feature_data3, twitter_info3)
+                nn, distance = self._index_rt.search(c_name, feature_data3, neighbors=NEIGHBOR_NUM)
+                twitter_data_index3 = self._index_daily.get_twitter_info(c_name).get_data()
+                res, positions = self._filter_nn_self(nn, distance, twitter_info3, twitter_data_index3, threshold, offset)
+                result_set += res
+            logger.info("<%s> [%s] find %s/%s neighbors in %s realtime index" % (
+                self._queryid, t.elapsed, len(res), twitter_info3.get_length(), c_name))
 
 
         for pos in positions:
