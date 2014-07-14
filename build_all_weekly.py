@@ -37,7 +37,7 @@ LOG_LEVEL       = logging.DEBUG
 WORK_BASE_PATH  = conf['WORK_BASE_PATH']
 LOG_FILE        = WORK_BASE_PATH + '/log/build_weekly.log'
 LOG_SCREEN_FILE = WORK_BASE_PATH + '/log/build_weekly.screen.log'
-DATA_PATH       = WORK_BASE_PATH + '/data/index_base'
+DATA_PATH       = WORK_BASE_PATH + '/data/index_all'
 FEATURE_DB_PATH = WORK_BASE_PATH + '/data/feature_all_leveldb'
 
 MIN_SHOW_PV     = conf['MIN_SHOW_PV']
@@ -156,7 +156,7 @@ def main(args):
     """
     """
 
-    data_dir = DATA_PATH + '/base_%s_%s' % (args.start.strftime("%Y%m%d"), args.end.strftime("%Y%m%d"))
+    data_dir = DATA_PATH + '/all_%s_%s' % (args.start.strftime("%Y%m%d"), args.end.strftime("%Y%m%d"))
     if not os.path.exists(data_dir):
         os.makedirs(data_dir)
     logger.info("==================== start to build %s ======================" % data_dir )

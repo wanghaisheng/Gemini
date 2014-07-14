@@ -24,6 +24,12 @@ conf = Config('./conf/build.yaml')
 
 GOODS_CATEGORY = conf['GOODS_CATEGORY']
 
+def chunks(l, n):
+    """ Yield successive n-sized chunks from l.
+    """
+    for i in xrange(0, len(l), n):
+        yield l[i:i + n]
+
 def distance_matrix(points, feature_data):
     vector = feature_data[points]
     return scipy.spatial.distance.cdist(vector, vector)

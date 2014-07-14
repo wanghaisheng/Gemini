@@ -79,10 +79,12 @@ class TwitterInfo():
 
 
     def get_length(self):
+        self._length = len(self._data)
         return self._length
 
     def append(self, line):
         self._data.append(line)
+
 
 if __name__=='__main__':
    raise Exception("do not run it directly.")

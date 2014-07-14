@@ -364,7 +364,9 @@ def prepare_twitter_info_with_feature(info_file, feature_file, info_data_raw, fo
 
     twitter_info = TwitterInfo()
 
-    if not force and (os.path.exists(info_file) and os.path.exists(feature_file)):
+    if not force and (os.path.exists(info_file)
+                      and (os.path.exists(feature_file)
+                           or os.path.exists(feature_file_npy))):
         logger.info("twitter info file %s and feature file %s is ready" % (info_file, feature_file))
         twitter_info.load(info_file)
         feature_data = try_load_npy(feature_file)

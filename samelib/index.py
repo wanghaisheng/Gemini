@@ -21,9 +21,14 @@ from twitter import TwitterInfo
 from utils import try_load_npy, setup_logger
 from config import Config
 
-conf = Config('../build.yaml')
+
+
+conf = Config(os.path.dirname(__file__)+'/../conf/build.yaml')
+# conf = Config('../conf/build.yaml')
 GOODS_CATEGORY = conf['GOODS_CATEGORY']
 category_names = map(lambda x:x['name'], GOODS_CATEGORY)
+
+IMAGE_FEATURE_DIM = conf['IMAGE_FEATURE_DIM']
 
 logger = setup_logger('SVR')
 
@@ -39,10 +44,10 @@ class Index():
         self._twitter_info_categories = {}
         self._feature_data_categories = {}
         for c_name in category_names:
-            self._feature_data_categories[c_name] = None
+            self._feature_data_categories[c_name] = np.zeros((0, IMAGE_FEATURE_DIM), dtype=float)
             self._twitter_info_categories[c_name] = TwitterInfo()
             self._flann_categories[c_name] = FLANN()
-            self._flann_para_categories[c_name] = None
+            self._flann_para_categories[c_name] = {}
 
 
     def clear(self):
@@ -54,7 +59,7 @@ class Index():
         """
         global category_names
         for c_name in category_names:
-            if not os.path.exists(dir + "/%s_twitter_info"):
+            if not os.path.exists(dir + "/%s_twitter_info" % c_name ):
                 continue
             self._twitter_info_categories[c_name].load(dir+"/%s_twitter_info" % c_name)
             self._feature_data_categories[c_name] = try_load_npy(dir+'/%s_feature_data' % c_name)
@@ -76,10 +81,18 @@ class Index():
             json.dump(self._flann_para_categories[c_name], dir + '/%s_flann_index_para' % c_name )
         return True
 
-    def search(self, c_name, feature, neighbors=5, ):
+    def search(self, c_name, feature, neighbors=5):
         flann = self._flann_categories[c_name]
         para = self._flann_para_categories[c_name]
+        feature_data = self._feature_data_categories[c_name]
+        n = len(feature_data) 
+        if n < neighbors:
+            # except AssertionError # assert(npts >= num_neighbors)
+            neighbors = n
         return flann.nn_index(feature, num_neighbors=neighbors, **para)
+        
+            
+
 
     def get_tid(self, c_name, pos):
         twitter_info = self._twitter_info_categories[c_name]
@@ -98,10 +111,10 @@ class Index():
         """
         offset = self._twitter_info_categories[c_name].get_length()
 
-        self._feature_data_categories[c_name] = np.append(self._feature_data_categories[c_name], feature_data)
+        self._feature_data_categories[c_name] = np.append(self._feature_data_categories[c_name], feature_data, axis=0)
         self._twitter_info_categories[c_name].set_data(self._twitter_info_categories[c_name].get_data() + twitter_info.get_data())
         para = self._flann_categories[c_name].build_index(self._feature_data_categories[c_name], algorithm='linear')
-        self._flann_para_categories = para
+        self._flann_para_categories[c_name] = para
         return offset
 
     def shrink(self, max_size, min_size):

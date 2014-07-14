@@ -38,22 +38,24 @@ import tornado.web
 import numpy as np
 
 sys.path.append(os.path.dirname(__file__)+'/../')
-from samelib.index import Index
-from samelib.twitter import TwitterInfo
 from samelib.utils import setup_logger, get_feature_db
+from samelib.twitter import TwitterInfo
 from samelib.config import Config
 from feature.feature import download_and_compute_feature
+
 
 # from tornado.options import define, options
 # define("port", default=8081, help="run on the given port", type=int)
 
+
 conf = Config('./conf/build.yaml')
-
-
 WORK_BASE_PATH = conf['WORK_BASE_PATH']
 LOG_FILE = WORK_BASE_PATH + '/log/server.log'
 LOG_LEVEL = logging.DEBUG
-DATA_PATH = WORK_BASE_PATH + '/data/index_day'
+logger = setup_logger('SVR', LOG_FILE, LOG_LEVEL)
+
+PATH_INDEX_WEEKLY = WORK_BASE_PATH + '/data/index_label_weekly/current'
+PATH_INDEX_DAILY = WORK_BASE_PATH + '/data/index_label_daily/current'
 FEATURE_DB_PATH = WORK_BASE_PATH + '/data/feature_all_leveldb'
 
 IMAGE_FEATURE_DIM = conf['IMAGE_FEATURE_DIM']
@@ -74,11 +76,11 @@ PROCESS_NUM = 8  # 同时工作的进程数
 NEIGHBOR_NUM = 10   # 最多的同款数量
 SERVER_PORT = conf['SERVER_PORT']
 
-RT_INDEX_MAX = 1000
-RT_INDEX_MIN = 300
+RT_INDEX_MAX = 50000
+RT_INDEX_MIN = 30000
 
+from samelib.index import Index
 
-logger = setup_logger('SVR', LOG_FILE, LOG_LEVEL)
 
 class IndexHandler(tornado.web.RequestHandler):
     def get(self):
@@ -116,7 +118,7 @@ def split_feature_into_categories(feature_data, twitter_info):
 
     feature_data_categories = {}
     twitter_info_categories = {}
-    for c_name, idx in idx_categories:
+    for c_name, idx in idx_categories.iteritems():
         twitter_info_categories[c_name] = TwitterInfo()
         data = map(lambda x: twitter_data[x], idx)
         twitter_info_categories[c_name].set_data(data)
@@ -165,10 +167,11 @@ class ResultPageHandler(tornado.web.RequestHandler):
         n_hit, n_miss = len(positions_hit), len(positions_miss)
         logger.info("<%s> [%s] get %s/%s features in leveldb" %(self._queryid, e-s, n_hit, n_hit+n_miss))
 
-        s = e
-        features_miss = self._workers.map(download_and_compute_feature, urls_miss)
-        e =time.time()
-        logger.info("<%s> [%s] get %s features average %s by downloading and computing" % (self._queryid, e-s, n_miss, (e-s)/n_miss))
+        if urls_miss:
+            s = e
+            features_miss = self._workers.map(download_and_compute_feature, urls_miss)
+            e =time.time()
+            logger.info("<%s> [%s] get %s features average %s by downloading and computing" % (self._queryid, e-s, n_miss, (e-s)/n_miss))
 
 
         # 合并, 有img特征的集合， 无img特征自然没有group id
@@ -194,9 +197,9 @@ class ResultPageHandler(tornado.web.RequestHandler):
             if feature is not None:
                 feature_data_list.append(feature)
                 twitter_id, goods_id, shop_id, category, url = twitter_info_raw[pos]
-                val = "\t".join((twitter_id, goods_id, shop_id, category, np.dumps(feature)))
                 twitter_info.append(twitter_info_raw[pos])
-                self._feature_db.Put(url, val)
+                val_w = twitter_id + "\t" + goods_id + "\t" + shop_id + "\t" + category + "\t" + feature.dumps()
+                self._feature_db.Put(url, val_w)
             else:
                 twitter_id, goods_id, shop_id, category, url = twitter_info_raw[pos]
                 ret = {'twitter_id': twitter_id, 'group_id': -1}
@@ -220,13 +223,12 @@ class ResultPageHandler(tornado.web.RequestHandler):
 
         twitter_info = TwitterInfo()
         for req in reqs:
-            line = (req['twitter_id'], req.get('goods_id', '-1'), req.get('shop_id', '-1'), req['category'], req['img_url'])
+            line = map(lambda x: x.encode('ascii'), (req['twitter_id'], req.get('goods_id', '-1'), req.get('shop_id', '-1'), req['category'], req['img_url']))
             twitter_info.append(line)
 
         return twitter_info
 
     def _filter_nn(self, nn, distances, twitter_info, twitter_data_index, threshold):
-
         """ 符合不同类目近邻标准的提取出来，不符合的返回 feature_data 继续下一轮查询"""
         result_set = []
         remain_pos = []
@@ -245,7 +247,7 @@ class ResultPageHandler(tornado.web.RequestHandler):
                 j += 1
             members = members[:j]
 
-            if members:
+            if len(members) > 0:        # members是np.ndarray
                 nn_tids = map(lambda x: twitter_data_index[x][0], members)
                 ret = {'twitter_id':tid, 'group_id': nn_tids[0], 'neighbors':nn_tids}
                 result_set.append(ret)
@@ -258,7 +260,9 @@ class ResultPageHandler(tornado.web.RequestHandler):
     def _filter_nn_self(self, nn, distances, twitter_info, twitter_data_index, threshold, offset):
         """
         查询包括自身在内的索引库，
-        符合不同类目近邻标准的提取出来，不符合的返回 feature_data 继续下一轮查询"""
+        保证返回的聚类不存在较差索引， A的同款是B， B的同款是A，互相等待，死锁。
+
+        """
 
         n = twitter_info.get_length()
         result_set = []
@@ -280,7 +284,7 @@ class ResultPageHandler(tornado.web.RequestHandler):
                 j += 1
 
             members = map(lambda x: members[x], positions)
-            if members:
+            if len(members)>0:
                 nn_tids = map(lambda x: twitter_data_index[x][0], members)
                 ret = {'twitter_id': tid, 'group_id': nn_tids[0], 'neighbors': nn_tids}
                 result_set.append(ret)
@@ -290,6 +294,35 @@ class ResultPageHandler(tornado.web.RequestHandler):
         return result_set, remain_pos
 
 
+    def _untie_groupid_cross_ref(self, result_set):
+        """
+        避免类别id交叉索引，造成上游程序死锁
+        123 --> groupid --> 234
+        234 --> groupid --> 123
+        """
+        tid2group = {}
+        group2tid = {}
+
+        for t in result_set:
+            tid = t['twitter_id']
+            groupid = t['group_id']
+            if tid in tid2group:        # 已经进入某个类别
+                continue
+            final_group = tid2group.get(groupid)
+            if final_group is not None:
+                tid2group[tid] = final_group
+                group2tid[final_group].add(tid)
+            else:
+                tid2group[tid] = tid
+                tid2group[groupid] = tid
+                group2tid[tid] = {tid, groupid}
+                
+        new_result_set = []                
+        for t in result_set:
+            r = {'twitter_id': t['twitter_id'], 'group_id':tid2group[t['twitter_id']], 'neighbors':t['neighbors'] }
+            new_result_set.append(r)
+
+        return new_result_set
 
     def post(self):
         """
@@ -300,6 +333,8 @@ class ResultPageHandler(tornado.web.RequestHandler):
             return json.dumps({'status': 1, 'message': 'bad method', 'data':[]})
             
         reqs = json.loads(self.get_argument('data', '[]'))
+        # import pdb
+        # pdb.set_trace()
 
         twitter_info_raw = self._map_req_to_twitter_info(reqs)
         feature_data, twitter_info, result_set = self._get_features(twitter_info_raw)
@@ -319,47 +354,51 @@ class ResultPageHandler(tornado.web.RequestHandler):
             logger.info("<%s> [%s] find %s/%s neighbors in %s base index" % (
                 self._queryid, t.elapsed, len(res), twitter_info.get_length(), c_name))
 
-            # 查询天级库
-            with Timer() as t:
-                feature_data2 = feature_data[positions]
-                twitter_info2 = TwitterInfo()
-                for pos in positions:
-                    twitter_info2.append(twitter_info[pos])
-                nn, distance = self._index_daily.search(c_name, feature_data2, neighbors=NEIGHBOR_NUM)
-                twitter_data_index2 = self._index_daily.get_twitter_info(c_name).get_data()
-                res, positions = self._filter_nn(nn, distance, twitter_info2, twitter_data_index2, threshold)
-                result_set += res
-            logger.info("<%s> [%s] find %s/%s neighbors in %s daily index" % (
-                self._queryid, t.elapsed, len(res), twitter_info2.get_length(), c_name))
+            if positions:
+                # 查询天级库
+                with Timer() as t:
+                    feature_data2 = feature_data[positions]
+                    twitter_info2 = TwitterInfo()
+                    for pos in positions:
+                        twitter_info2.append(twitter_info[pos])
+                    nn, distance = self._index_daily.search(c_name, feature_data2, neighbors=NEIGHBOR_NUM)
+                    twitter_data_index2 = self._index_daily.get_twitter_info(c_name).get_data()
+                    res, positions = self._filter_nn(nn, distance, twitter_info2, twitter_data_index2, threshold)
+                    result_set += res
+                logger.info("<%s> [%s] find %s/%s neighbors in %s daily index" % (
+                    self._queryid, t.elapsed, len(res), twitter_info2.get_length(), c_name))
 
-            # 查询realtime库
-            with Timer() as t:
-                feature_data3 = feature_data2[positions]
-                twitter_info3 = TwitterInfo()
-                for pos in positions:
-                    twitter_info3.append(twitter_info2[pos])
-                offset = self._index_rt.insert(c_name, feature_data3, twitter_info3)
-                nn, distance = self._index_rt.search(c_name, feature_data3, neighbors=NEIGHBOR_NUM)
-                twitter_data_index3 = self._index_daily.get_twitter_info(c_name).get_data()
-                res, positions = self._filter_nn_self(nn, distance, twitter_info3, twitter_data_index3, threshold, offset)
-                result_set += res
-            logger.info("<%s> [%s] find %s/%s neighbors in %s realtime index" % (
-                self._queryid, t.elapsed, len(res), twitter_info3.get_length(), c_name))
+            if positions:
+                # 查询realtime库
+                with Timer() as t:
+                    feature_data3 = feature_data2[positions]
+                    twitter_info3 = TwitterInfo()
+                    for pos in positions:
+                        twitter_info3.append(twitter_info2[pos])
+
+                    offset = self._index_rt.insert(c_name, feature_data3, twitter_info3)
+                    nn, distance = self._index_rt.search(c_name, feature_data3, neighbors=NEIGHBOR_NUM)
+                    twitter_data_index3 = self._index_rt.get_twitter_info(c_name).get_data()
+                    res, positions = self._filter_nn_self(nn, distance, twitter_info3, twitter_data_index3, threshold, offset)
+                    res = self._untie_groupid_cross_ref(res)
+                    result_set += res
+                logger.info("<%s> [%s] find %s/%s neighbors in %s realtime index" % (
+                    self._queryid, t.elapsed, len(res), twitter_info3.get_length(), c_name))
 
 
-        for pos in positions:
-            ret = {'twitter_id': twitter_info3[pos][0], 'group_id': -1}
-            result_set.append(ret)
+            for pos in positions:
+                ret = {'twitter_id': twitter_info3[pos][0], 'group_id': -1}
+                result_set.append(ret)
 
-        return json.dumps(result_set)
+        respones = {'status': 0, 'message': 'successful', 'data':result_set}
+        self.write(json.dumps(respones))
 
 
     def on_finish(self):
         with Timer() as t:
-            old_size = self._index_rt.shrink(max_size=RT_INDEX_MAX, min_size=RT_INDEX_MIN)
-        if old_size != -1:
-            logger.info("<%s> [%s] rt index shrinked from %s to %s" % (
-                self._queryid, t.elapsed, old_size, RT_INDEX_MIN))
+            self._index_rt.shrink(max_size=RT_INDEX_MAX, min_size=RT_INDEX_MIN)
+        logger.info("<%s> [%s] rt index shrinked " % (
+                self._queryid, t.elapsed))
 
 
 class Application(tornado.web.Application):
@@ -414,8 +453,8 @@ def parse_args():
     TODO: 在config目录提供相应配置，根据tornado.options进行解析
     """
     parser = ArgumentParser(description='图片同款检测服务的http server.')
-    parser.add_argument("basedir", metavar='BASE_DIR', help="path to base index files.")
-    parser.add_argument("daydir", metavar='DAY_DIR', help="path to daily index files.")
+    parser.add_argument("--basedir", metavar='BASE_DIR', default=PATH_INDEX_WEEKLY, help="path to base index files.")
+    parser.add_argument("--daydir", metavar='DAY_DIR', default=PATH_INDEX_DAILY, help="path to daily index files.")
     parser.add_argument("--port", metavar='PORT', type=int, default=SERVER_PORT, help="server port. default %s" % SERVER_PORT )
     args = parser.parse_args()
     return args
