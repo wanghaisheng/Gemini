@@ -20,9 +20,9 @@ import time
 import random
 
 import MySQLdb
-from samelib.group import Group
-from samelib.utils import try_load_npy, distance_matrix
-from ptutils.dictools import flat2list
+# from ptutils.dicttools import flat2list
+from samelib.utils import flat2list
+from samelib.utils import chunks
 
 IMAGE_URL = 'http://imgst.meilishuo.net/'
 
@@ -34,7 +34,7 @@ def parse_args():
     parser = ArgumentParser(description='将同款组文件两列或者多列，转化为org（html）格式，分析同款组质量.')
     parser.add_argument("input", metavar='INPUT', help="the group id pickle dump file.")
     parser.add_argument("output", metavar='OUTPUT', help="the output html file.")
-    parser.add_argument("type", metavar='TYPE', default='twitter', help="twitter/good id, default twitter.")
+    parser.add_argument("--type", metavar='TYPE', default='twitter', help="twitter/good id, default twitter.")
     args = parser.parse_args()
     if args.type not in ('twitter', 'good'):
         parser.print_help()
@@ -73,10 +73,11 @@ def main(args):
         sql = sqlt % ",".join(chk)
         print sql
         cursor.execute(sql)
-        res = cursor.fetech(all)
+        res = cursor.fetchall()
         for r in res:
+            r = map(str, r)
             tid2url[r[0]] = r[2]
-            gid2url[r[1]] = r[0]
+            gid2tid[r[1]] = r[0]
     
 
     output_file = args.output
@@ -87,6 +88,7 @@ def main(args):
         
     fh = open(temp_file, 'w')
     print >> fh, "#+ATTR_HTML: target=\"_blank\" "
+    i = 0
     for line in  data:
         if args.type =='twitter':
             tids = line
@@ -94,12 +96,15 @@ def main(args):
         else:
             gids = line
             tids = map(lambda x: gid2tid.get(x), line)
+        i += 1
+        print >> fh, "* the %s twitter" % i
+        
 
         if gids is not None:
             print >> fh, "| %s |" % "|".join(map(str, gids))
         print >> fh, "| %s |" % "|".join(map(str, tids))
         info_tuple = map(lambda x: (x, tid2url.get(x)), tids)
-        print >> fh, "| %s |" % " | " .join(lambda x: "[[http://www.meilishuo.com/share/item/%s][http://imgst.meilishuo.net/%s]]" % (x[0], x[1]) , info_tuple)
+        print >> fh, "| %s |" % " | " .join(map(lambda x: "[[http://www.meilishuo.com/share/item/%s][http://imgst.meilishuo.net/%s]]" % (x[0], x[1]) , info_tuple))
     fh.close()
     cmd = " emacs --kill --batch %s -f org-export-as-html " % temp_file
     os.system(cmd)
