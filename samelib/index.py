@@ -75,11 +75,17 @@ class Index():
             os.makedirs(dir)
 
         for c_name in self._twitter_info_categories:
-            self._twitter_info_categories[c_name].save(dir+"/%s_twitter_info" % c_name)
+            twitter_info = self._twitter_info_categories[c_name]
+            n = len(twitter_info.get_data())
+            if n == 0:
+                continue
+            
+            twitter_info.save(dir+"/%s_twitter_info" % c_name)
             feature_data = self._feature_data_categories[c_name]
             np.save(dir+'/%s_feature_data.npy' % c_name, feature_data)
             self._flann_categories[c_name].save_index(dir+'/%s_flann_index' % c_name)
             json.dump(self._flann_para_categories[c_name], open(dir + '/%s_flann_index_para' % c_name, 'w') )
+            
         return True
 
     def search(self, c_name, feature, neighbors=5):

@@ -110,6 +110,9 @@ class ExitHandler(tornado.web.RequestHandler):
         index_rt = self.application.index_rt
         index_rt.save(RT_INDEX_DIR)
         logger.info("save the rt index %s and exit" % RT_INDEX_DIR )
+
+        # feature_db = self.application.feature_db
+        # del feature_db # 没找到close方法，保证解锁
         
     def on_finish(self):
         if self._flag:
@@ -442,7 +445,7 @@ class Application(tornado.web.Application):
             index1 = Index()
             index1.load(base_dir)
         logger.info("[%s] loading base index data in %s . " % (t.elapsed, base_dir))
-    
+
         # 加载天级库
         with Timer() as t:
             index2 = Index()
