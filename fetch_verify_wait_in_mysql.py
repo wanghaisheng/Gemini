@@ -128,6 +128,11 @@ def post_to_same_server(query):
            'method':'group'}
     r = requests.post(SAME_SERVER, data=req)
     # {'status':0, 'message':'abc', 'data':[]}
+    try:
+        remote_data = json.loads(r.content)['data']
+    except ValueError:
+        logger.fatal("same server return %s: content is %s " % (r, r.content) )
+        sys.exit(1)
     return json.loads(r.content)['data'] + same_twitter_list
         
 

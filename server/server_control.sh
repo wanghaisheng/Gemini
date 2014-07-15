@@ -12,7 +12,15 @@
 
 HOST=127.0.0.1
 PORT=8773
-ABS_PATH=`pwd`/$0
+
+prefix=`expr substr $0 1 1`
+if [ $prefix == '/' ] ; then
+    ABS_PATH=$0
+else
+    ABS_PATH=`pwd`/$0
+fi
+echo "prefix=" $prefix
+echo "abspath=" $ABSPATH
 ABS_DIR=`dirname $ABS_PATH`
 
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/$ABS_DIR/../feature
@@ -45,4 +53,5 @@ case  "$1"  in
 	echo "   stop:    elegent exit the server"
 	echo "   restart: if the server is not alive, restart it."        
 esac 
+
 

@@ -41,7 +41,7 @@ function lock_run_instance ()
     echo "[$ts] create the lock file $TEMP_LOCK_FILE"
 }
 	    
-
+lock_run_instance 
 
 RUNTIME=`date`
 RUN_WEEKDAY=`date +%a` 		# Sun
@@ -94,5 +94,9 @@ fi
 
 # 每20分钟执行一次，dump数据
 ts=`date`
+$PWD/server/server_control.sh restart
 echo "[$ts] fetch twitter and query same server"
 $PYTHON_BIN fetch_verify_wait_in_mysql.py 1>> log/fetch_verify_wait_in_mysql.stdout 2>>log/fetch_verify_wait_in_mysql.stderr
+
+
+rm $TEMP_LOCK_FILE
