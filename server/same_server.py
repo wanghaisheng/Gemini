@@ -355,8 +355,9 @@ class ResultPageHandler(tornado.web.RequestHandler):
             return json.dumps({'status': 1, 'message': 'bad method', 'data':[]})
             
         reqs = json.loads(self.get_argument('data', '[]'))
-        # import pdb
-        # pdb.set_trace()
+        
+        import pdb
+        pdb.set_trace()
 
         twitter_info_raw = self._map_req_to_twitter_info(reqs)
         feature_data, twitter_info, result_set = self._get_features(twitter_info_raw)

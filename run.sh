@@ -19,7 +19,7 @@
 #
 ###################################################
 
-PWD = `pwd`
+PWD=`pwd`
 TEMP_LOCK_FILE='tmp.run.instance.lock'
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$PWD/feature
 PYTHON_BIN=/home/work/taopeng/local/Python-2.7.6/bin/python
@@ -30,11 +30,12 @@ function lock_run_instance ()
     while [ 1 ]
     do
 	ts=`date` 
-	if[ -e $TEMP_LOCK_FILE  ] ; then
+	if [ -e $TEMP_LOCK_FILE  ];then
 	    echo "[$ts] other intance is running!"
 	    sleep 1m	# 1 minute, 另一种选择是退出，保证不要积累太多的任务。20分钟一次。
 	else
 	    break
+	fi
     done
     touch $TEMP_LOCK_FILE
     echo "[$ts] create the lock file $TEMP_LOCK_FILE"
@@ -69,7 +70,7 @@ if [ $RUN_WEEKDAY -eq 'Sun'  ] ; then
 	    
 	    $PWD/server/server_control.sh start
 	fi
-    if
+    fi
 fi
 
 # 执行天级建库脚本
@@ -84,9 +85,9 @@ if [ $RUN_HOUR -eq '6' ] ; then	# 保证sqoops的脚本导完了。
 	$PYTHON_BIN build_label_daily.py 1>> log/build_label_daily.stdout 2>>log/build_label_daily.stderr
 	
 	ts=`date`
-	echo "[$ts] stop same server"
-	$PWD/server/server_control.sh stop
-    if
+	echo "[$ts] start same server"
+	$PWD/server/server_control.sh start
+    fi
 fi
     
 
@@ -94,4 +95,4 @@ fi
 # 每20分钟执行一次，dump数据
 ts=`date`
 echo "[$ts] fetch twitter and query same server"
-$PYTHON_BIN fetch_verify_wait_in_mysql.py 1>> log/fetch_verify_wait_in_mysql.stdout 2>>log/fetch_verify_wait_in_mysql.stdout.stderr
+$PYTHON_BIN fetch_verify_wait_in_mysql.py 1>> log/fetch_verify_wait_in_mysql.stdout 2>>log/fetch_verify_wait_in_mysql.stderr

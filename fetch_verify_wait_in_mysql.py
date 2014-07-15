@@ -77,24 +77,30 @@ class Query:
 
         tid2data = {}
         for r in result:
+            r = map(str, r)
             tid2data[r[0]] = [r[1], r[2]]
 
 
         db2 = get_brdshop_db()
         cursor2 = db2.cursor()
         sqlt = "select twitter_id, shop_id, goods_img from brd_shop_goods_info_new where twitter_id in (%s);"
+        tid2url = {}
         for chk in chunks(tid2data.keys(), 1000):
             sql = sqlt % ",".join(map(str, chk))
             cursor2.execute(sql)
             res = cursor2.fetchall()
             for r in res:
-                twitter_id, shop_id, goods_img = r
-                goods_id, catalog_id = tid2data[twitter_id]
-                tid2data[twitter_id] = (twitter_id, goods_id, shop_id, catalog_id, goods_img)
-        
+                twitter_id, shop_id, goods_img = map(str, r)
+                tid2url[twitter_id] = (shop_id, goods_img)
                 
-        for v in tid2data.values():
-            self._data.append(v)
+        for tid in tid2data:
+            goods_id, catalog_id = tid2data[tid]
+            if tid in tid2url:
+                shopid, goods_img = tid2url[tid]
+            else:
+                shopid, goods_img = "", ""
+            val = (tid, goods_id, shopid, catalog_id, goods_img)
+            self._data.append(val)
 
     def save_to_txt(self, fn):
         fh = open(fn, "w")
@@ -112,7 +118,7 @@ def post_to_same_server(query):
     post_data = []
     same_twitter_list = []
     for ele in data:
-        if len(ele) != 5:
+        if len(ele) != 5 or ele[4].strip() == '':
             # 没有url的数据，比如 select * from brd_shop_goods_info_new where twitter_id=2970750377;
             same_twitter_list.append({'twitter_id':ele[0], 'group_id':-1})
             continue
@@ -121,7 +127,8 @@ def post_to_same_server(query):
     req = {'data': json.dumps(post_data),
            'method':'group'}
     r = requests.post(SAME_SERVER, data=req)
-    return json.loads(r.content)
+    # {'status':0, 'message':'abc', 'data':[]}
+    return json.loads(r.content)['data'] + same_twitter_list
         
 
 
@@ -137,10 +144,10 @@ def res_to_db(res):
     cursor = db.cursor()
     for ele in res:
         twitter_id = ele['twitter_id']
-        group_id = ele['groupe_id']
-        sql = "update t_dolphin_twitter_verify_wait set same_twitter_id=%s where twitter_id = %s;" %(groupe_id, twitter_id)
+        group_id = ele['group_id']
+        sql = "update t_dolphin_twitter_verify_wait set same_twitter_id=%s where twitter_id = %s;" %(group_id, twitter_id)
+        print sql
         cursor.execute(sql)
-
 
 
 def main(args):
@@ -153,19 +160,20 @@ def main(args):
         query.load_from_txt(args.input)
     else:
         query.load_from_db()
-        # query.save_to_txt("tmp.tid.from.db.txt")
+    if args.save is not None:
+        query.save_to_txt(args.save)
 
     n = len(query.get_data())
     with Timer() as t:
-        res = post_to_same_server(query)
-        data = res['data']
+        data = post_to_same_server(query)
+        # data = res['data']
     logger.info("[%s] %s/%s are judged by same server" % (t.elapsed, len(data), n) )
 
 
     if args.output is not None:
         res_to_txt(data, args.output)
     else:
-        results.save_to_db()
+        res_to_db(data)
 
 
 def parse_args():
@@ -174,6 +182,7 @@ def parse_args():
     parser = ArgumentParser(description='建立所有已标注样本的相似图片索引，每周定时启动。')
     parser.add_argument("--input", help="从文件中获取出入，而不是从数据库中查询.")
     parser.add_argument("--output", help="将同款结果写入文件，而不是数据库.")
+    parser.add_argument("--save", help="将待检测数据写入文件，作为下次输入")    
     args = parser.parse_args()
 
     return args
