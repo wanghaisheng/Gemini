@@ -71,14 +71,15 @@ class Index():
         """
         dir:  path to index files
         """
-        global category_names
-        for c_name in category_names:
-            if c_name not in self._twitter_info_categories:
-                continue
+        if not os.path.exists(dir):
+            os.makedirs(dir)
+
+        for c_name in self._twitter_info_categories:
             self._twitter_info_categories[c_name].save(dir+"/%s_twitter_info" % c_name)
-            self._feature_data_categories[c_name].save(dir+'/%s_feature_data' % c_name)
+            feature_data = self._feature_data_categories[c_name]
+            np.save(dir+'/%s_feature_data.npy' % c_name, feature_data)
             self._flann_categories[c_name].save_index(dir+'/%s_flann_index' % c_name)
-            json.dump(self._flann_para_categories[c_name], dir + '/%s_flann_index_para' % c_name )
+            json.dump(self._flann_para_categories[c_name], open(dir + '/%s_flann_index_para' % c_name, 'w') )
         return True
 
     def search(self, c_name, feature, neighbors=5):

@@ -47,6 +47,7 @@ from feature.feature import download_and_compute_feature
 # from tornado.options import define, options
 # define("port", default=8081, help="run on the given port", type=int)
 
+http_server = None
 
 conf = Config('./conf/build.yaml')
 WORK_BASE_PATH = conf['WORK_BASE_PATH']
@@ -86,18 +87,36 @@ class IndexHandler(tornado.web.RequestHandler):
     def get(self):
         self.render('index.html')
 
+class PingHandler(tornado.web.RequestHandler):
+    def get(self):
+        self.write({'status':0, 'message':'server is ok'})
+
 
 class ExitHandler(tornado.web.RequestHandler):
     def initialize(self):
         self._key = 'UkoJRlAIxsCNlAWO'
+        self._flag = False
 
     def post(self):
         # TODO 优雅关闭
         # 保存实时索引的数据
+        vkey = self.get_argument('vkey')
+        if vkey != self._key:
+            self.write(json.dumps({'status':2, 'message':'invalid vkey, failed to close the server'}))
+            return
+        
+        self.write(json.dumps({'status':0, 'message':'the server is shutingdown'}))
+        self._flag = True
         index_rt = self.application.index_rt
         index_rt.save(RT_INDEX_DIR)
         logger.info("save the rt index %s and exit" % RT_INDEX_DIR )
-        sys.exit(0)
+        
+    def on_finish(self):
+        if self._flag:
+            global http_server
+            http_server.stop()
+            tornado.ioloop.IOLoop.instance().stop()
+
 
 
 def split_feature_into_categories(feature_data, twitter_info):
@@ -407,7 +426,7 @@ class Application(tornado.web.Application):
     """
     def __init__(self, base_dir, daily_dir, leveldb=None):
         handles = [
-            (r'/', IndexHandler),
+            (r'/ping', PingHandler),
             (r'/result', ResultPageHandler),
             (r'/exit', ExitHandler)
         ]
@@ -461,11 +480,14 @@ def parse_args():
 
 #----------------------------------------------------------------------
 def main(args):
+    global http_server
+    
     # tornado.options.parse_command_line()
     http_server = tornado.httpserver.HTTPServer(Application(args.basedir, args.daydir))
     # http_server.listen(options.port)
     http_server.listen(args.port)
     tornado.ioloop.IOLoop.instance().start()
+    logger.info("same server is exited")
 
 
 if __name__ == '__main__':
