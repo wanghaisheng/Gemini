@@ -59,11 +59,11 @@ if [ $RUN_WEEKDAY -eq 'Sun'  ] ; then
 
 	    ts=`date`
 	    echo "[$ts] $PYTHON_BIN build_label_weekly.py"
-	    $PYTHON_BIN build_all_weekly.py 1>> log/build_all_weekly.stdout 2>>log/build_all_weekly.stderr
+	    $PYTHON_BIN build_all_weekly.py >>log/build_all_weekly.stderr 2>&1
 
 	    ts=`date`
 	    echo "[$ts] $PYTHON_BIN build_label_weekly.py"
-	    $PYTHON_BIN build_label_weekly.py  1>> log/build_label_weekly.stdout 2>>log/build_label_weekly.stderr
+	    $PYTHON_BIN build_label_weekly.py  >>log/build_label_weekly.stderr 2>&1
 
 	    ts=`date`
 	    echo "[$ts] start same serer"
@@ -82,7 +82,7 @@ if [ $RUN_HOUR -eq '6' ] ; then	# 保证sqoops的脚本导完了。
 	
 	ts=`date`
 	echo "[$ts] $PYTHON_BIN build_label_daily.py"
-	$PYTHON_BIN build_label_daily.py 1>> log/build_label_daily.stdout 2>>log/build_label_daily.stderr
+	$PYTHON_BIN build_label_daily.py >> log/build_label_daily.stderr 2>&1
 	
 	ts=`date`
 	echo "[$ts] start same server"
@@ -96,7 +96,7 @@ fi
 ts=`date`
 $PWD/server/server_control.sh restart
 echo "[$ts] fetch twitter and query same server"
-$PYTHON_BIN fetch_verify_wait_in_mysql.py 1>> log/fetch_verify_wait_in_mysql.stdout 2>>log/fetch_verify_wait_in_mysql.stderr
+$PYTHON_BIN fetch_verify_wait_in_mysql.py >> log/fetch_verify_wait_in_mysql.stderr 2>&1
 
 
 rm $TEMP_LOCK_FILE
