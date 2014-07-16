@@ -57,7 +57,7 @@ FLANN_BUILD_INDEX_PARA:
     branching: 256
     checks: 8192
 
-IS_PRINT_LOG_TO_SCREEN : 1   # 是否把日志向屏幕打印（logger）
+IS_PRINT_LOG_TO_SCREEN : 0   # 是否把日志向屏幕打印（logger）
 
 HIVE_PATH : /hadoop/hive/bin   # hive的路径
 

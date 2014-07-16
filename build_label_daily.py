@@ -131,14 +131,14 @@ def main(args):
     """
     """
 
-    data_dir = DATA_PATH + '/daily_from_%s' % (args.date.strftime("%Y%m%d"))
+    data_dir = DATA_PATH + '/daily_%s_%s' % (args.start.strftime("%Y%m%d"), args.date.strftime("%Y%m%d"))
     if not os.path.exists(data_dir):
         os.makedirs(data_dir)
         
     logger.info("==================== start %s daily build %s ======================" % (args.date.strftime("%Y%m%d"), data_dir))
 
     twitter_info_raw_file = data_dir + '/twitter_info_raw'
-    twitter_info_raw = prepare_twitter_raw_info(twitter_info_raw_file, args.date, force=args.force)
+    twitter_info_raw = prepare_twitter_raw_info(twitter_info_raw_file, args.start, force=args.force)
 
     shop_stat = build_pipeline_with_twitter_info_raw(twitter_info_raw, data_dir, force=args.force)
 
@@ -168,7 +168,7 @@ def parse_args():
     cur = args.date
     while cur.isoweekday() != 7: # 最近一个周日
         cur -= datetime.timedelta(days=1)
-    args.date = cur 
+    args.start = cur 
 
     return args
 

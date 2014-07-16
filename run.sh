@@ -49,15 +49,19 @@ RUN_WEEKDAY=`date +%a` 		# Sun
 RUN_HOUR=`date +%H`		# 0~23
 RUN_MINUTE=`date +%M`		# 0~59
 
+# RUN_HOUR=6
+# RUN_MINUTE=1
+
 lock_run_instance
 
 # 执行周级脚本
-if [ $RUN_WEEKDAY -eq 'Sun'  ] ; then 
-    if [ $RUN_HOUR -eq '12' ] ; then # 保证sell_pool表生成
+if [ $RUN_WEEKDAY = 'Sun'  ] ; then 
+    if [ $RUN_HOUR = '12' ] ; then # 保证sell_pool表生成
 	if [ $RUN_MINUTE -lt 20 ] ; then
 	    ts=`date`
 	    echo "[$ts] stop same server"
 	    $PWD/server/server_control.sh stop
+	    echo ""
 
 	    ts=`date`
 	    echo "[$ts] $PYTHON_BIN build_label_weekly.py"
@@ -69,18 +73,19 @@ if [ $RUN_WEEKDAY -eq 'Sun'  ] ; then
 
 	    ts=`date`
 	    echo "[$ts] start same serer"
-	    
 	    $PWD/server/server_control.sh start
+	    echo ""
 	fi
     fi
 fi
 
 # 执行天级建库脚本
-if [ $RUN_HOUR -eq '6' ] ; then	# 保证sqoops的脚本导完了。
-    if [ $RUN_MINUTEUTE -lt 20 ] ; then
+if [ $RUN_HOUR = '6' ] ; then	# 保证sqoops的脚本导完了。
+    if [ $RUN_MINUTE -lt 20 ] ; then
 	ts=`date`
 	echo "[$ts] stop same server"
 	$PWD/server/server_control.sh stop
+	echo ""
 	
 	ts=`date`
 	echo "[$ts] $PYTHON_BIN build_label_daily.py"
@@ -89,6 +94,7 @@ if [ $RUN_HOUR -eq '6' ] ; then	# 保证sqoops的脚本导完了。
 	ts=`date`
 	echo "[$ts] start same server"
 	$PWD/server/server_control.sh start
+	echo ""
     fi
 fi
     
@@ -97,8 +103,10 @@ fi
 # 每20分钟执行一次，dump数据
 ts=`date`
 $PWD/server/server_control.sh restart
+echo ""
 echo "[$ts] fetch twitter and query same server"
 $PYTHON_BIN fetch_verify_wait_in_mysql.py >> log/fetch_verify_wait_in_mysql.stderr 2>&1
 
-
+ts=`date`
+echo "[$ts] end run.sh. remove the lock file $TEMP_LOCK_FILE"
 rm $TEMP_LOCK_FILE

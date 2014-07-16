@@ -15,6 +15,7 @@ import os
 from argparse import ArgumentParser
 import logging
 import json
+from time import sleep
 
 import MySQLdb
 import requests
@@ -126,9 +127,25 @@ def post_to_same_server(query):
         post_data.append(r)
     req = {'data': json.dumps(post_data),
            'method':'group'}
-    r = requests.post(SAME_SERVER, data=req)
-    # {'status':0, 'message':'abc', 'data':[]}
+    
+    max_tries = 3
+    i = 1
+    flag = False
+    while(i <= max_tries):
+        try:
+            r = requests.post(SAME_SERVER, data=req)
+            flag = True
+        except requests.exceptions.ConnectionError:
+            # server刚启动, 短时间无法响应，这里等待一下
+            logger.info("sleep %s th time for connecting the server" % i )
+            sleep(60*i)
+        i += 1
+        
+    if not flag:
+        return None
+
     try:
+        # {'status':0, 'message':'abc', 'data':[]}
         remote_data = json.loads(r.content)['data']
     except ValueError:
         logger.fatal("same server return %s: content is %s " % (r, r.content) )
@@ -147,11 +164,12 @@ def res_to_db(res):
     db = get_dolphin_db()
     db.autocommit(True)
     cursor = db.cursor()
+    logger.info("start to write same_twitter_id to db")
     for ele in res:
         twitter_id = ele['twitter_id']
         group_id = ele['group_id']
         sql = "update t_dolphin_twitter_verify_wait set same_twitter_id=%s where twitter_id = %s;" %(group_id, twitter_id)
-        print sql
+        logger.info(sql)
         cursor.execute(sql)
 
 
@@ -172,6 +190,10 @@ def main(args):
     with Timer() as t:
         data = post_to_same_server(query)
         # data = res['data']
+    if data is None:
+        logger.fatal("could not connect to the server")
+        sys.exit(1)
+
     logger.info("[%s] %s/%s are judged by same server" % (t.elapsed, len(data), n) )
 
 

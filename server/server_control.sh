@@ -31,6 +31,7 @@ case  "$1"  in
     "stop")
         echo "curl -d \"vkey=UkoJRlAIxsCNlAWO\" $HOST:$PORT/exit"
 	curl -d "vkey=UkoJRlAIxsCNlAWO" $HOST:$PORT/exit
+	echo ""
 	;;
     "restart")
         echo "curl $HOST:$PORT/ping"

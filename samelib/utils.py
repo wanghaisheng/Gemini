@@ -23,6 +23,7 @@ from config import Config
 conf = Config('./conf/build.yaml')
 
 GOODS_CATEGORY = conf['GOODS_CATEGORY']
+IS_PRINT_LOG_TO_SCREEN = conf['IS_PRINT_LOG_TO_SCREEN']
 
 def chunks(l, n):
     """ Yield successive n-sized chunks from l.
@@ -83,7 +84,7 @@ def setup_logger(name, fn=None, level=logging.DEBUG):
         handler.setFormatter(formatter)
         logger.addHandler(handler)
 
-        if 1 : # if conf['IS_PRINT_LOG_TO_SCREEN']:
+        if IS_PRINT_LOG_TO_SCREEN:
             handler = logging.StreamHandler(sys.stderr)
             handler.setFormatter(formatter)
             logger.addHandler(handler)
