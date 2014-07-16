@@ -38,17 +38,19 @@ function lock_run_instance ()
 	fi
     done
     touch $TEMP_LOCK_FILE
-    echo "[$ts] create the lock file $TEMP_LOCK_FILE"
+    echo "================================================"
+    echo "[$ts] begin run.sh. create the lock file $TEMP_LOCK_FILE"
 }
 	    
-lock_run_instance 
+
 
 RUNTIME=`date`
 RUN_WEEKDAY=`date +%a` 		# Sun
 RUN_HOUR=`date +%H`		# 0~23
 RUN_MINUTE=`date +%M`		# 0~59
 
-lock_run_instance()
+lock_run_instance
+
 # 执行周级脚本
 if [ $RUN_WEEKDAY -eq 'Sun'  ] ; then 
     if [ $RUN_HOUR -eq '12' ] ; then # 保证sell_pool表生成
