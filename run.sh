@@ -14,7 +14,7 @@
 #          1. build_label_daily.py
 #          2. 输出目录类似 data/index_label_daily/current -> data/index_label_daily/daily_from_20140713
 #      3.  每周日中午12点启动周级别建库
-#          1. build_label_weekly.py
+#          1. build_all_weekly.py
 #          2. 输入目录类似：data/index_label_weekly/current -> data/index_label_weekly/label_util_20140714
 #
 ###################################################
@@ -32,7 +32,7 @@ function lock_run_instance ()
 	ts=`date` 
 	if [ -e $TEMP_LOCK_FILE  ];then
 	    echo "[$ts] other intance is running!"
-	    sleep 1m	# 1 minute, 另一种选择是退出，保证不要积累太多的任务。20分钟一次。
+	    sleep 5m	# 1 minute, 另一种选择是退出，保证不要积累太多的任务。20分钟一次。
 	else
 	    break
 	fi
@@ -56,7 +56,7 @@ lock_run_instance
 
 # 执行周级脚本
 if [ $RUN_WEEKDAY = 'Sun'  ] ; then 
-    if [ $RUN_HOUR = '12' ] ; then # 保证sell_pool表生成
+    if [ $RUN_HOUR -eq 10 ] ; then # 保证sell_pool表生成
 	if [ $RUN_MINUTE -lt 20 ] ; then
 	    ts=`date`
 	    echo "[$ts] stop same server"
@@ -75,13 +75,15 @@ if [ $RUN_WEEKDAY = 'Sun'  ] ; then
 	    echo "[$ts] start same serer"
 	    $PWD/server/server_control.sh start
 	    echo ""
+	    sleep 1m
 	fi
     fi
 fi
 
 # 执行天级建库脚本
-if [ $RUN_HOUR = '6' ] ; then	# 保证sqoops的脚本导完了。
+if [ $RUN_HOUR -eq 4 ] ; then	# 保证sqoops的脚本导完了。
     if [ $RUN_MINUTE -lt 20 ] ; then
+
 	ts=`date`
 	echo "[$ts] stop same server"
 	$PWD/server/server_control.sh stop
@@ -94,6 +96,7 @@ if [ $RUN_HOUR = '6' ] ; then	# 保证sqoops的脚本导完了。
 	ts=`date`
 	echo "[$ts] start same server"
 	$PWD/server/server_control.sh start
+	sleep 1m
 	echo ""
     fi
 fi
@@ -104,6 +107,7 @@ fi
 ts=`date`
 $PWD/server/server_control.sh restart
 echo ""
+sleep 1m
 echo "[$ts] fetch twitter and query same server"
 $PYTHON_BIN fetch_verify_wait_in_mysql.py >> log/fetch_verify_wait_in_mysql.stderr 2>&1
 

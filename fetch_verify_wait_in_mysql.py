@@ -135,6 +135,7 @@ def post_to_same_server(query):
         try:
             r = requests.post(SAME_SERVER, data=req)
             flag = True
+            break
         except requests.exceptions.ConnectionError:
             # server刚启动, 短时间无法响应，这里等待一下
             logger.info("sleep %s th time for connecting the server" % i )

@@ -426,7 +426,7 @@ class ResultPageHandler(tornado.web.RequestHandler):
 
 class Application(tornado.web.Application):
     """
-    TODO: 将server改为多进程，提高并发的响应。
+    TODO: 将重量级初始化（索引加载etc）从这里摘出来，避免ping等服务无响应。
     """
     def __init__(self, base_dir, daily_dir, leveldb=None):
         handles = [

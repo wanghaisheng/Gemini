@@ -22,6 +22,7 @@ import random
 from samelib.group import Group
 from samelib.twitter import TwitterInfo
 
+GROUP_PICK_LIST = ["clothes_group_pickle", "shoes_group_pickle", "bag_group_pickle", "acc_group_pickle", "other_group_pickle"]
 
 #----------------------------------------------------------------------
 def parse_args():
@@ -29,13 +30,15 @@ def parse_args():
     
     """
     parser = ArgumentParser(description='分析恶意上新商家, 批量输出店铺文件')
-    parser.add_argument("group_file", metavar='GROUP', help="the group id pickle dump file.")
+    parser.add_argument("group_dir", metavar='GROUP', help="the dir of group id pickle dump files.")
     parser.add_argument("twitter_file", metavar='TWITTER', help="the twitter info file.")
     parser.add_argument("shop_list", metavar='SHOP', help="the shop list.")
     parser.add_argument("output", metavar='OUTPUT', help="the output html file.")
-    parser.add_argument("--maxshow", type=int, default=5, help="同店同款，最大展现数量. default 5 ")
-    parser.add_argument("--maxshow2", type=int, default=2, help="他店同款，最大展现数量. default 3 ")
-    parser.add_argument("--maxgroup", type=int, default=20, help="最大图片展现group数量. default 50 ")
+    parser.add_argument("--maxshow", type=int, default=5, help="同店同款，最大图片展现数量. default 5 ")
+    parser.add_argument("--maxshow2", type=int, default=5, help="他店同款，最大图片展现数量. default 5 ")
+    parser.add_argument("--max_col", type=int, default=20, help="全部同款，最大整体展现数量. default 20 ")    
+    parser.add_argument("--maxgroup", type=int, default=30, help="最大图片展现group数量. default 30 ")
+    parser.add_argument("--maxline", type=int, default=100, help="最大展现group数量. default 100 ")
     args = parser.parse_args()
     return args
 
@@ -49,10 +52,10 @@ def map_shop_to_twitter_pos(twitter_data):
         res[shop_id].add(i)
     return res
 
-def output_group_image_table(twitter_info, positions, max_show, flag="店内同款"):
-    twitter_strings = map(lambda x: "*%s*" % twitter_info[x][0], positions)
+def output_group_image_table(twitter_info, positions, max_show, max_col, flag="店内同款"):
+    twitter_strings = map(lambda x: "*%s*" % twitter_info[x][0], positions[:max_col])
     positions1 = positions[:max_show]
-    positions2 = positions[max_show:]
+    positions2 = positions[max_show:max_col]
     image_urls = map(lambda x: "[[http://www.meilishuo.com/share/item/%s][http://imgst.meilishuo.net/%s]]" % (twitter_info[x][0], twitter_info[x][-1]), positions1)
     text_urls = map(lambda x: "[[http://www.meilishuo.com/share/item/%s][image]]" % (twitter_info[x][0]), positions2)
     x = len(positions)
@@ -60,9 +63,11 @@ def output_group_image_table(twitter_info, positions, max_show, flag="店内同�
     sz += "| - | %s |" % " | ".join(image_urls+text_urls)
     return sz
 
-def output_group_text_table(twitter_info, positions, max_show, flag="店内同款"):
-    text_urls = map(lambda x: "[[http://www.meilishuo.com/share/item/%(tid)s][%(tid)s]]" % (twitter_info[x][0]), positions)
+def output_group_text_table(twitter_info, positions, max_col, flag="店内同款"):
     x = len(positions)
+    positions1 = positions[:max_col]
+    text_urls = map(lambda x: "[[http://www.meilishuo.com/share/item/%(tid)s][%(tid)s]]" % {"tid":twitter_info[x][0]}, positions)
+
     sz =  "|*%s共%s个*| %s |" % (flag, x, " | ".join(text_urls)) +"\n"
     return sz
 
@@ -75,14 +80,14 @@ def main(args):
     """
 
     group = Group()
-    group.load(args.group_file)
+    for f in GROUP_PICK_LIST:
+        group.append(args.group_dir + '/' + f, check=True)
+        
     twitter_info = TwitterInfo()
     twitter_info.load(args.twitter_file)
 
     allshop2pos = map_shop_to_twitter_pos(twitter_info.get_data())
 
-    count_total = group.tid_num()
-    
     shop2pos = {}
     shopids = map(lambda x: x.strip(), open(args.shop_list).readlines())
     for s in shopids:
@@ -101,6 +106,7 @@ def main(args):
             local_group[group_pos].add(pos)
         result_map[shop] = ret
 
+    output_file = args.output
     if not os.path.exists(output_file):
         os.makedirs(output_file)
 
@@ -110,34 +116,39 @@ def main(args):
             print >> fh, "#+ATTR_HTML: target=\"_blank\" "
             print >> fh, "* [[http://www.meilishuo.com/shop/%s][shopid=%s]] 总商品量%s" % (shop, shop, info['total'])
             print >> fh
+
             local_group = info['groups']
-            k = 0
-            ratio = float(info['repeat'])/info['total']
-            #ordered_keys = random.shuffle(info.keys())
-            ordered_keys = info.keys()
+            
+            #ordered_keys = random.shuffle(local_group.keys())
+            ordered_keys = local_group.keys()
+            
             n = len(ordered_keys)
-            for i in range(n)[:args.maxgroup]:
+            list1 = range(n)[:args.maxgroup]
+            list2 = range(n)[args.maxgroup:args.maxline]
+            for i in list1:
                 group_pos = ordered_keys[i]
                 positions = local_group[group_pos]
-                sz = output_group_image_table(twitter_info, positions, max_show=args.maxshow, flag="店内同款")
+                sz = output_group_image_table(twitter_info, list(positions), max_show=args.maxshow, max_col=args.max_col, flag="店内同款")
                 print >> fh, sz
                 total_group_members = group.get_member(group_pos)
                 positions2 = total_group_members.difference(positions)
-                sz = output_group_image_table(twitter_info, positions2, max_show=args.maxshow2, flag="跨店同款")
-                print >> fh, sz
+                if positions2:
+                    sz = output_group_image_table(twitter_info, list(positions2), max_show=args.maxshow2, max_col=args.max_col, flag="跨店同款")
+                    print >> fh, sz
 
                 print >> fh
 
-            print >>fh, "* 避免拖垮浏览器，以下图片省略"
+            if list2:
+                print >>fh, "* 避免拖垮浏览器，以下图片省略"
             
-            for i in range(n)[args.maxgroup:]:
+            for i in list2:
                 group_pos = ordered_keys[i]
                 positions = local_group[group_pos]
-                sz = output_group_text_table(twitter_info, positions, flag="店内同款")
+                sz = output_group_text_table(twitter_info, list(positions), max_col=args.max_col, flag="店内同款")
                 print >> fh, sz
                 total_group_members = group.get_member(group_pos)
                 positions2 = total_group_members.difference(positions)
-                sz = output_group_text_table(twitter_info, positions2, flag="跨店同款")
+                sz = output_group_text_table(twitter_info, list(positions2), max_col=args.max_col, flag="跨店同款")
                 print >> fh, sz
 
                 print >> fh

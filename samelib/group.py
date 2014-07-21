@@ -44,11 +44,28 @@ class Group():
         """
         with open(fn, 'rb') as fh:
             pos2groupid, groupid2pos = cPickle.load(fh)
-            self._pos2groupid = pos2groupid
+            self._pos2groupid.update = pos2groupid
             self._groupid2pos = groupid2pos
         return True
+    
 
-
+    def append(self, fn, check=False):
+        """ 追加多个pickle文件（按照类目划分）"""
+        fh = open(fn, 'rb')
+        pos2groupid, groupid2pos = cPickle.load(fh)
+        if check:
+            s1 = set(pos2groupid.keys())
+            s2 = set(self._pos2groupid.keys())
+            if s1.intersection(s2):
+                return False
+            s1 = set(groupid2pos.keys())
+            s2 = set(self._groupid2pos.keys())
+            if s1.intersection(s2):
+                return False
+        self._pos2groupid.update(pos2groupid)
+        self._groupid2pos.update(groupid2pos)
+        return True
+            
 
     def load_tid(self, fn):
         """

@@ -37,7 +37,7 @@ LOG_LEVEL       = logging.DEBUG
 WORK_BASE_PATH  = conf['WORK_BASE_PATH']
 LOG_FILE        = WORK_BASE_PATH + '/log/build_weekly.log'
 LOG_SCREEN_FILE = WORK_BASE_PATH + '/log/build_weekly.screen.log'
-DATA_PATH       = WORK_BASE_PATH + '/data/index_all'
+DATA_PATH       = WORK_BASE_PATH + '/data/index_all_weekly'
 FEATURE_DB_PATH = WORK_BASE_PATH + '/data/feature_all_leveldb'
 
 MIN_SHOW_PV     = conf['MIN_SHOW_PV']
@@ -167,6 +167,13 @@ def main(args):
 
     shop_stat = build_pipeline_with_twitter_info_raw(twitter_info_raw, data_dir, force=args.force)
 
+    path_to_current = DATA_PATH+'/current'
+    if os.path.exists(path_to_current):
+        if os.path.islink(path_to_current):
+            os.unlink(path_to_current)
+        else:
+            logger.fatal("%s is not a symbolic link!" % path_to_current)
+    os.symlink(data_dir, path_to_current)
 
 
 def parse_args():
