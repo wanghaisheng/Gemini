@@ -114,7 +114,7 @@ def main(args):
         temp_file = output_file + '/' + shopid + '.org'
         with open(temp_file, "w") as fh:
             print >> fh, "#+ATTR_HTML: target=\"_blank\" "
-            print >> fh, "* [[http://www.meilishuo.com/shop/%s][shopid=%s]] 总商品量%s" % (shop, shop, info['total'])
+            print >> fh, "* [[http://www.meilishuo.com/shop/%s][shopid=%s]] 总商品量%s" % (shopid, shopid, info['total'])
             print >> fh
 
             local_group = info['groups']
