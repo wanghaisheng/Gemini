@@ -44,7 +44,7 @@ class Group():
         """
         with open(fn, 'rb') as fh:
             pos2groupid, groupid2pos = cPickle.load(fh)
-            self._pos2groupid.update = pos2groupid
+            self._pos2groupid = pos2groupid
             self._groupid2pos = groupid2pos
         return True
     
