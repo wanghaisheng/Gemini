@@ -81,7 +81,7 @@ def get_twitter_info_by_hive(fn, date):
      A join
      ( select twitter_id, catalog_id
        from ods_dolphin_twitter_verify_operation
-       where op_date >= unix_timestamp('%(dates)s')
+       where op_uid!=-100 and op_date >= unix_timestamp('%(dates)s')
     )
     B on (A.twitter_id = B.twitter_id) ; """ % {'dates': date_string, 'hive_out': hive_out}
     cmds = [HIVE_PATH + '/hive', '-e', hql.replace("\n", "")]

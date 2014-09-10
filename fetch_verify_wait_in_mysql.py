@@ -56,6 +56,49 @@ class Query:
     def __init__(self):
         self._data = []
 
+    def load_from_txt_tid(self, fn):
+        tids=[]
+        for line in open(fn):
+            tids.append(line)
+
+        db2 = get_brdshop_db()
+        cursor2 = db2.cursor()
+        sqlt = "select twitter_id, goods_id, shop_id, goods_img from brd_shop_goods_info_new where twitter_id in (%s);"
+        tid2url = {}
+        sql = sqlt % ",".join(map(str, tids))
+        #print sql
+        cursor2.execute(sql)
+        res = cursor2.fetchall()
+        goods_ids=[]
+        for r in res:
+            twitter_id, goods_id, shop_id, goods_img = map(str, r)
+            print "for db2:"+twitter_id+" "+goods_id+" "+shop_id+" "+goods_img
+
+            tid2url[twitter_id] = (goods_id, shop_id, goods_img)
+            goods_ids.append(goods_id)
+        
+        db = get_dolphin_db()
+        cursor = db.cursor()
+        sqlt = "select goods_id, catalog_id from t_dolphin_catalog_goods_map where goods_id in (%s);"
+        sql = sqlt % ",".join(map(str, goods_ids))
+        print sql
+        cursor.execute(sql)
+        res = cursor.fetchall()
+        id2catalog={}
+        for r in res:
+            goods_id,catalog_id = map(str,r)
+            id2catalog[goods_id] = catalog_id
+            print "from db:"+goods_id+" "+catalog_id       
+        tmp=open('tmp', 'wb') 
+        for k,v in tid2url.items():
+              goods_id, shop_id, goods_img = map(str, v) 
+              catalog_id=id2catalog[goods_id]
+              #self._data.append(line.strip().split("\t"))
+              #print k+" "+goods_id+" "+shop_id+" "+catalog_id+" "+goods_img
+              #self._data.append((k,goods_id,shop_id,catalog_id,goods_img)) 
+              tmp.write(k+'\t'+goods_id+'\t'+shop_id+'\t'+catalog_id+'\t'+goods_img+"\n")
+        #self.load_from_txt("tmp")
+
     def load_from_txt(self, fn):
         self._data = []
 
@@ -122,8 +165,10 @@ def post_to_same_server(query):
         if len(ele) != 5 or ele[4].strip() == '':
             # 没有url的数据，比如 select * from brd_shop_goods_info_new where twitter_id=2970750377;
             same_twitter_list.append({'twitter_id':ele[0], 'group_id':-1})
+           #logger.info("tid %s not full" % ele[0])
             continue
         r = {'twitter_id': ele[0], 'goods_id': ele[1], 'shop_id': ele[2], 'category': catalog_id_to_name(ele[3]), 'img_url': ele[4]}
+        #logger.info("read tid=%s gid=%s shop_id=%s cate=%s img_url=%s" % (ele[0],ele[1],ele[2], catalog_id_to_name(ele[3]), ele[4]))
         post_data.append(r)
     req = {'data': json.dumps(post_data),
            'method':'group'}
@@ -179,8 +224,10 @@ def main(args):
     """
     query = Query()
     # result = Result()
-
-    if args.input is not None:
+    if args.inputtid is not None:
+        query.load_from_txt_tid(args.inputtid)
+        query.load_from_txt("tmp")
+    elif args.input is not None:
         query.load_from_txt(args.input)
     else:
         query.load_from_db()
@@ -211,6 +258,8 @@ def parse_args():
     parser.add_argument("--input", help="从文件中获取出入，而不是从数据库中查询.")
     parser.add_argument("--output", help="将同款结果写入文件，而不是数据库.")
     parser.add_argument("--save", help="将待检测数据写入文件，作为下次输入")    
+    parser.add_argument("--inputtid", help="从文件中获取出入，而不是从数据库中查询.")
+
     args = parser.parse_args()
 
     return args

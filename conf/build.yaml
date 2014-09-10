@@ -51,7 +51,7 @@ FLANN_BUILD_INDEX_PARA:
     checks: 4096
 
   -
-    num: 1000000
+    num: 1500000
     iterations: 10
     algorithm: kmeans
     branching: 256

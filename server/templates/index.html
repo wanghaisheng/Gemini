@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>
+      同款检测server调研接口
+    </title>
+    <style type="text/css">
+      h1 {font-size:20px; text-align:center;}
+      h2 {font-size:20px;}
+      .btns{width:120px; height:30px;font-size:20px;}
+    </style>
+</head>
+  <body>
+    <h1> 商品流行度审核流程同款检测服务调研接口</h1>
+    <br/>
+    <form method="post" action="/result" align="center">
+      <input type="hidden" name="method" value="debug"/>
+      <h1> 请输入图片url <h1>
+      <p><input type="text" name="imgurl" style="width:600px;height:25px"></p>
+      <h2>选择输入图片的所属类别:</h2>
+        <input type="radio" name="category" value="clothes" checked="checked"/> 衣服
+        <input type="radio" name="category" value="shoes"/> 鞋子
+        <input type="radio" name="category" value="bag"/> 包包
+	<input type="radio" name="category" value="acc"/> 配饰
+	<input type="radio" name="category" value="other"/> 其他
+      <br />
+      <br />
+      <input type="submit" class= "btns" value="搜索">
+    </form>
+  </body>
+</html>
+

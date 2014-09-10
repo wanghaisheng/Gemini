@@ -91,7 +91,7 @@ def get_twitter_info_by_hive(fn, start, end, pv):
    where goods_status=1 )
  A join
  ( select distinct(twitter_id)
-   from ods_dolphin_stat_sell_pool
+   from ods_dolphin_stat_sell_pool_new 
    where dt in (%(dates)s) and yesterday_shows > %(show)s 
 )
 B on (A.twitter_id = B.twitter_id) join

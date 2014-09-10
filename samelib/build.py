@@ -82,7 +82,11 @@ def build_flann_index(index_file, para_file, feature_data, force=False):
         logger.info("[%s] load index file %s and para file %s" % (t.elapsed, index_file, para_file))
     else:
         n = len(feature_data)
+        logger.info("prepare to build index file %s by flann with num=%d " % (index_file, n))
+
+
         para_input = _pick_flann_para(n, FLANN_BUILD_INDEX_PARA)
+        logger.info("before to build index file") 
         with Timer() as t:
             params = flann.build_index(feature_data, **para_input)
             json.dump(params, open(para_file, 'w'))

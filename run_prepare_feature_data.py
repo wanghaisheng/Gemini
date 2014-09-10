@@ -85,6 +85,7 @@ def main():
     e = time.time()
     s1k = time.time()
     e1k = time.time()
+    '''
     # 很多图片不能处理，计算不成功，放在索引库中有各种问题。暂时忽略。
     twitter_info_ok = []
     j = 0
@@ -163,6 +164,6 @@ def main():
     for line in twitter_info_ok:
         print >> fh, "\t".join(line)
     fh.close()
-
+    '''
 if __name__ == "__main__":
     main()

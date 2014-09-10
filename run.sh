@@ -56,7 +56,9 @@ lock_run_instance
 
 # 执行周级脚本
 if [ $RUN_WEEKDAY = 'Sun'  ] ; then 
-    if [ $RUN_HOUR -eq 10 ] ; then # 保证sell_pool表生成
+#test
+#if [ $RUN_WEEKDAY = 'Tue'  ] ; then 
+  if [ $RUN_HOUR -eq 10 ] ; then # 保证sell_pool表生成
 	if [ $RUN_MINUTE -lt 20 ] ; then
 	    ts=`date`
 	    echo "[$ts] stop same server"
@@ -64,7 +66,7 @@ if [ $RUN_WEEKDAY = 'Sun'  ] ; then
 	    echo ""
 
 	    ts=`date`
-	    echo "[$ts] $PYTHON_BIN build_label_weekly.py"
+	    echo "[$ts] $PYTHON_BIN build_all_weekly.py"
 	    $PYTHON_BIN build_all_weekly.py >>log/build_all_weekly.stderr 2>&1
 
 	    ts=`date`
@@ -76,6 +78,17 @@ if [ $RUN_WEEKDAY = 'Sun'  ] ; then
 	    $PWD/server/server_control.sh start
 	    echo ""
 	    sleep 1m
+        # 把输出靠给策略同学使用（to shenchongwei）
+        cat $PWD/data/index_all_weekly/current/*tid2group > $PWD/data/index_all_weekly/current/same_all_weekly
+        scp $PWD/data/index_all_weekly/current/same_* search@search01:/home/search/same_pic_result/
+        scp $PWD/data/index_all_weekly//current/same_* search@search02:/home/search/same_pic_result/
+        scp $PWD/data/index_all_weekly//current/same_* search@gz-search01:/home/search/same_pic_result/
+        
+        cat $PWD/data/index_label_weekly/current/*tid2group > $PWD/data/index_label_weekly/current/same_label_weekly
+        scp $PWD/data/index_label_weekly/current/same_* search@search01:/home/search/same_pic_result/
+        scp $PWD/data/index_label_weekly/current/same_* search@search02:/home/search/same_pic_result/
+        scp $PWD/data/index_label_weekly/current/same_* search@gz-search01:/home/search/same_pic_result/
+ 
 	fi
     fi
 fi
@@ -98,6 +111,11 @@ if [ $RUN_HOUR -eq 4 ] ; then	# 保证sqoops的脚本导完了。
 	$PWD/server/server_control.sh start
 	sleep 1m
 	echo ""
+    #把数据发送给崇伟
+    cat $PWD/data/index_label_daily/current/*tid2group > $PWD/data/index_label_daily/current/same_label_daily
+    scp $PWD/data/index_label_daily/current/same_* search@search01:/home/search/same_pic_result/
+    scp $PWD/data/index_label_daily/current/same_* search@search02:/home/search/same_pic_result/
+    scp $PWD/data/index_label_daily/current/same_* search@gz-search01:/home/search/same_pic_result/
     fi
 fi
     
