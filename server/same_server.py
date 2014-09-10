@@ -211,6 +211,7 @@ class ResultPageHandler(tornado.web.RequestHandler):
             else:
                 twitter_id, goods_id, shop_id, category, url = twitter_info_raw[pos]
                 ret = {'twitter_id': twitter_id, 'group_id': -1}
+                #logger.info("feature nonetwitter_id=%s  group_id=%s " % (twitter_id, -1))
                 result_set.append(ret)
 
         for i in xrange(n_miss):
@@ -282,7 +283,7 @@ class ResultPageHandler(tornado.web.RequestHandler):
     def _filter_nn_self(self, nn, distances, twitter_info, twitter_data_index, threshold, offset):
         """
         查询包括自身在内的索引库，
-        保证返回的聚类不存在较差索引， A的同款是B， B的同款是A，互相等待，死锁。
+        保证返回的聚类不存在交叉索引， A的同款是B， B的同款是A，互相等待，死锁。
 
         """
 
@@ -376,6 +377,8 @@ class ResultPageHandler(tornado.web.RequestHandler):
                 result_set += res
             logger.info("<%s> [%s] find %s/%s neighbors in %s base index" % (
                 self._queryid, t.elapsed, len(res), twitter_info.get_length(), c_name))
+            #if positions:
+            #    logger.info("position not empy")
 
             if positions:
                 # 查询天级库
@@ -383,14 +386,26 @@ class ResultPageHandler(tornado.web.RequestHandler):
                     feature_data2 = feature_data[positions]
                     twitter_info2 = TwitterInfo()
                     for pos in positions:
+                        #logger.info("position=%d" % pos)
                         twitter_info2.append(twitter_info[pos])
+
                     nn, distance = self._index_daily.search(c_name, feature_data2, neighbors=NEIGHBOR_NUM)
+
+                        #logger.info("twitter_info=%d" % twitter_info[pos])
+        
+                    #logger.info("position not empy realtime2")
+
+                    
                     twitter_data_index2 = self._index_daily.get_twitter_info(c_name).get_data()
+                    #logger.info("position not empy realtime3")
                     res, positions = self._filter_nn(nn, distance, twitter_info2, twitter_data_index2, threshold)
                     result_set += res
+                    #logger.info("position not empy realtime4")
                 logger.info("<%s> [%s] find %s/%s neighbors in %s daily index" % (
                     self._queryid, t.elapsed, len(res), twitter_info2.get_length(), c_name))
-
+            
+            #logger.info("position not empy realtime")
+      
             if positions:
                 # 查询realtime库
                 with Timer() as t:
@@ -408,11 +423,10 @@ class ResultPageHandler(tornado.web.RequestHandler):
                 logger.info("<%s> [%s] find %s/%s neighbors in %s realtime index" % (
                     self._queryid, t.elapsed, len(res), twitter_info3.get_length(), c_name))
 
-
             for pos in positions:
                 ret = {'twitter_id': twitter_info3[pos][0], 'group_id': -1}
                 result_set.append(ret)
-
+        
         respones = {'status': 0, 'message': 'successful', 'data':result_set}
         self.write(json.dumps(respones))
 
