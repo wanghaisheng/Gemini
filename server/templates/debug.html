@@ -29,13 +29,58 @@
       <input type="submit" class= "btns" value="搜索">
     </form>
 
-    {% if url_no_feature  %}
+    <h1><img src="{{url}}"/></h1>    
+    {% if success   %}
+        <h1>{{ url }} </h1>
+    {% else  %}
         <h1>无法计算url的特征向量： {{ url_no_feature }} </h1>
-        <hr/>
+    {% end %}
+     <hr/>
+
+    {% if content  %}
+
+        <table  border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides" target="_blank" align="center">
+          <tbody>
+            <tr>
+              <th>索引</th>           
+              <th>图片</th>
+              <th>距离</th>
+              <th>twitter id</th>
+              <th>goods id</th>
+              <th>shop id</th>
+              <th>catalog id</th>              
+            </tr>
+            <tr>
+              <td>每周图片库</td>
+              <td><img src="http://imgst.meilishuo.net{{content[0]['point'][4]}}" /></td>
+              <td>{{content[0]['dis']}}></td>
+              <td><a href="http://www.meilishuo.com/share/item/{{content[0]['point'][0]}}">{{content[0]['point'][0]}}</a></td>
+              <td>{{content[0]['point'][1]}}</td>
+              <td><a href="http://www.meilishuo.com/shop/{{content[0]['point'][2]}}">{{content[0]['point'][2]}}</a></td>
+              <td>{{content[0]['point'][3]}}</td>              
+            </tr>
+            <tr>
+              <td>每日图片库</td>
+              <td><img src="http://imgst.meilishuo.net{{content[1]['point'][4]}}" /></td>
+              <td>{{content[1]['dis']}}></td>
+              <td><a href="http://www.meilishuo.com/share/item/{{content[1]['point'][0]}}">{{content[1]['point'][0]}}</a></td>
+              <td>{{content[1]['point'][1]}}</td>
+              <td><a href="http://www.meilishuo.com/shop/{{content[1]['point'][2]}}">{{content[1]['point'][2]}}</a></td>
+              <td>{{content[1]['point'][3]}}</td>              
+            </tr>
+            <tr>
+              <td>当前图片库</td>
+              <td><img src="http://imgst.meilishuo.net{{content[2]['point'][4]}}" /></td>
+              <td>{{content[2]['dis']}}></td>
+              <td><a href="http://www.meilishuo.com/share/item/{{content[2]['point'][0]}}">{{content[2]['point'][0]}}</a></td>
+              <td>{{content[2]['point'][1]}}</td>
+              <td><a href="http://www.meilishuo.com/shop/{{content[2]['point'][2]}}">{{content[2]['point'][2]}}</a></td>
+              <td>{{content[2]['point'][3]}}</td>              
+            </tr>
+          </tbody>
+        </table>
     {% end %}
 
-    {{ content }}
-    
   </body>
 </html>
 

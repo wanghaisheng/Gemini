@@ -489,7 +489,7 @@ class ResultPageHandler(tornado.web.RequestHandler):
 
         # 无法获取有效图片特征
         if result_set:
-            self.render("debug.html", url_no_feature=img_url, content=None)
+            self.render("debug.html", success=False, url=img_url, content=None)
             return
 
         feature_data_categories, twitter_info_categories = split_feature_into_categories(feature_data, twitter_info)
@@ -528,7 +528,7 @@ class ResultPageHandler(tornado.web.RequestHandler):
                 else:
                     search_results.append({'point':None, 'dis':None})
 
-        self.render('debug.html', url_no_feature=None, content=json.dumps(search_results))
+        self.render('debug.html', success=True, url=img_url, content=search_results)
         return
 
 
