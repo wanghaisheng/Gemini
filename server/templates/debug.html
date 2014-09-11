@@ -28,6 +28,14 @@
       <br />
       <input type="submit" class= "btns" value="搜索">
     </form>
+
+    {% if url_no_feature  %}
+        <h1>无法计算url的特征向量： {{ url_no_feature }} </h1>
+        <hr/>
+    {% end %}
+
+    {{ content }}
+    
   </body>
 </html>
 
