@@ -5,7 +5,7 @@
  Author:  tao peng --<taopeng@meilishuo.com>
  Purpose:
      1. 提供同款检测服务的http server
-     2. http://server/result接口
+     2. http://server/result核心接口: method:group
          2.1 输入： {'data':[
                       {'twitter_id': 13345, 'goods_id'：1345, 'shop_id'： 123 'category':'shoes', 'img_url':'/pic/afsfdsf.jpg'} ,
                       {'twitter_id': 13377, 'goods_id'：1347,                 'category':'clothes', 'img_url':'/pic/dsfjsldflads.jpg'}
@@ -349,11 +349,35 @@ class ResultPageHandler(tornado.web.RequestHandler):
 
     def post(self):
         """
-        input json for post request:
+        提供两种服务
+        1. 批量的同款服务。 method = group
+        2. 提供单个图片的debug接口，分析case。 method = debug
         """
         method = self.get_argument('method')
-        if method != 'group':
-            return json.dumps({'status': 1, 'message': 'bad method', 'data':[]})
+        if method == 'debug':
+            self._post_debug()
+            return 
+        elif method == 'group':
+            self._post_group()
+            return
+        else:
+            self.write(json.dumps({'status': 1, 'message': 'bad method', 'data':[]}))
+            return
+
+    def _post_group(self):
+        """
+        实现 post请求的method=group
+        输入：
+        {'data':[
+                 {'twitter_id': 13345, 'goods_id'：1345, 'shop_id'： 123 'category':'shoes', 'img_url':'/pic/afsfdsf.jpg'} ,
+                 {'twitter_id': 13377, 'goods_id'：1347,                 'category':'clothes', 'img_url':'/pic/dsfjsldflads.jpg'}
+                ];
+          'method':'group'}
+
+        输出： [
+        { 'twitter_id': 13345, 'group_id': 13345, 'neighbors': [ 12346, 12235, 12266] } ,
+        { 'twitter_id': 13345, 'group_id': -1} ,
+        """
             
         reqs = json.loads(self.get_argument('data', '[]'))
         
@@ -386,25 +410,23 @@ class ResultPageHandler(tornado.web.RequestHandler):
                     feature_data2 = feature_data[positions]
                     twitter_info2 = TwitterInfo()
                     for pos in positions:
-                        #logger.info("position=%d" % pos)
+                        # logger.info("position=%d" % pos)
                         twitter_info2.append(twitter_info[pos])
 
                     nn, distance = self._index_daily.search(c_name, feature_data2, neighbors=NEIGHBOR_NUM)
 
-                        #logger.info("twitter_info=%d" % twitter_info[pos])
-        
-                    #logger.info("position not empy realtime2")
-
+                    # logger.info("twitter_info=%d" % twitter_info[pos])
+                    # logger.info("position not empy realtime2")
                     
                     twitter_data_index2 = self._index_daily.get_twitter_info(c_name).get_data()
-                    #logger.info("position not empy realtime3")
+                    # logger.info("position not empy realtime3")
                     res, positions = self._filter_nn(nn, distance, twitter_info2, twitter_data_index2, threshold)
                     result_set += res
                     #logger.info("position not empy realtime4")
                 logger.info("<%s> [%s] find %s/%s neighbors in %s daily index" % (
                     self._queryid, t.elapsed, len(res), twitter_info2.get_length(), c_name))
             
-            #logger.info("position not empy realtime")
+            # logger.info("position not empy realtime")
       
             if positions:
                 # 查询realtime库
@@ -431,6 +453,82 @@ class ResultPageHandler(tornado.web.RequestHandler):
         self.write(json.dumps(respones))
 
 
+    def _post_debug(self):
+        """
+        实现 post请求的 method=debug
+        输入：
+        {
+        'imgurl' : 'path/2/img',
+        'category' : 'acc',
+        'method':'group'
+        }
+
+        输出： html的展示页面 ,
+                                                                                                                                                                         ]
+        """
+        # 为了debug，放宽相似性阈值
+        SIMPLE_THRESHOLD = 1
+
+        category = self.get_argument('category')
+        img_url = self.get_argument('imgurl')
+        img_url_short = img_url
+        if img_url.startswith('http://'):
+            # 去掉 http的网站前缀，方便复用后面的函数
+            img_url_short = img_url[7:].split("/", 1)[1]
+
+
+        twitter_info_raw = TwitterInfo()
+        # line = map(lambda x: x.encode('ascii'), (req['twitter_id'], req.get('goods_id', '-1'), req.get('shop_id', '-1'), req['category'], req['img_url']))
+        line = ('-1', '-1', '-1', category, img_url_short)
+        twitter_info_raw.append(line)
+
+        feature_data, twitter_info, result_set = self._get_features(twitter_info_raw)
+
+        # 无法获取有效图片特征
+        if result_set:
+            self.render("debug.html", url_no_feature=img_url)
+            return
+
+        feature_data_categories, twitter_info_categories = split_feature_into_categories(feature_data, twitter_info)
+
+        search_results = []
+
+        for c_name in twitter_info_categories:
+            feature_data = feature_data_categories[c_name]
+            twitter_info = twitter_info_categories[c_name]
+            threshold = category_thresholds[c_name]
+
+            # 查询大库
+            with Timer() as t:
+                nn, distance = self._index_base.search(c_name, feature_data, neighbors=1)
+                twitter_data_index = self._index_base.get_twitter_info(c_name).get_data()
+                if nn:
+                    search_results.append({'point': twitter_data_index[nn[0]], 'dis': distance[0]})
+                else:
+                    search_results.append({'point':None, 'dis':None})
+
+            # 天级库
+            with Timer() as t:
+                nn, distance = self._index_daily.search(c_name, feature_data, neighbors=1)
+                twitter_data_index = self._index_daily.get_twitter_info(c_name).get_data()
+                if nn:
+                    search_results.append({'point': twitter_data_index[nn[0]], 'dis': distance[0]})
+                else:
+                    search_results.append({'point':None, 'dis':None})
+
+            # 查询realtime库
+            with Timer() as t:
+                nn, distance = self._index_rt.search(c_name, feature_data3, neighbors=NEIGHBOR_NUM)
+                twitter_data_index = self._index_rt.get_twitter_info(c_name).get_data()
+                if nn:
+                    search_results.append({'point': twitter_data_index[nn[0]], 'dis': distance[0]})
+                else:
+                    search_results.append({'point':None, 'dis':None})
+
+        self.render('debug.html', content=json.dumps(search_results))
+        return
+
+
     def on_finish(self):
         with Timer() as t:
             self._index_rt.shrink(max_size=RT_INDEX_MAX, min_size=RT_INDEX_MIN)
@@ -446,7 +544,8 @@ class Application(tornado.web.Application):
         handles = [
             (r'/ping', PingHandler),
             (r'/result', ResultPageHandler),
-            (r'/exit', ExitHandler)
+            (r'/exit', ExitHandler),
+            (r'/index', IndexHandler)
         ]
         settings = dict(
             template_path=os.path.join(os.path.dirname(__file__), 'templates'),
@@ -454,6 +553,11 @@ class Application(tornado.web.Application):
             debug=True,
         )
         tornado.web.Application.__init__(self,handles,**settings)
+
+        # 在分配大内存前fork子进程，避免数据被复制给子进程
+        # http://stackoverflow.com/questions/14749897/python-multiprocessing-memory-usage
+        self.feature_db = get_feature_db(FEATURE_DB_PATH)
+        self.workers = multiprocessing.Pool(PROCESS_NUM)
     
         # 加载大库
         with Timer() as t:
@@ -478,8 +582,7 @@ class Application(tornado.web.Application):
         self.index_daily = index2
         self.index_rt = index3
     
-        self.feature_db = get_feature_db(FEATURE_DB_PATH)
-        self.workers = multiprocessing.Pool(PROCESS_NUM)
+
 
 def parse_args():
     """
