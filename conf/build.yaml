@@ -63,7 +63,7 @@ HIVE_PATH : /hadoop/hive/bin   # hive的路径
 
 IMAGE_FEATURE_DIM : 960       # 图片提取特征的维数
 
-SERVER_PORT       : 8773
+SERVER_PORT       : 8081
 
 IS_DUMP_TXT_FEATURE   : 0     # 是否保存txt版本的图片feature， 960维， 比较耗时
 

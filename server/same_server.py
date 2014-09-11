@@ -51,7 +51,7 @@ http_server = None
 
 conf = Config('./conf/build.yaml')
 WORK_BASE_PATH = conf['WORK_BASE_PATH']
-LOG_FILE = WORK_BASE_PATH + '/log/server.log'
+LOG_FILE = WORK_BASE_PATH + '/log/same_server.log'
 LOG_LEVEL = logging.DEBUG
 logger = setup_logger('SVR', LOG_FILE, LOG_LEVEL)
 

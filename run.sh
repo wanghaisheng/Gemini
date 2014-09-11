@@ -22,7 +22,7 @@
 PWD=`pwd`
 TEMP_LOCK_FILE='tmp.run.instance.lock'
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$PWD/feature
-PYTHON_BIN=/home/work/taopeng/local/Python-2.7.6/bin/python
+PYTHON_BIN=/home/work/taopeng/local/Python-2.7.8/bin/python
 
 function lock_run_instance ()
 {
