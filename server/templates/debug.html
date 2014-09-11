@@ -29,9 +29,9 @@
       <input type="submit" class= "btns" value="搜索">
     </form>
 
-    <h1><img src="{{url}}"/></h1>    
+    <h1><img src="{{url}}" width="226" height="300" /></h1>    
     {% if success   %}
-        <h1>{{ url }} </h1>
+        {{ url }}
     {% else  %}
         <h1>无法计算url的特征向量： {{ url_no_feature }} </h1>
     {% end %}
@@ -52,29 +52,29 @@
             </tr>
             <tr>
               <td>每周图片库</td>
-              <td><img src="http://imgst.meilishuo.net{{content[0]['point'][4]}}" /></td>
-              <td>{{content[0]['dis']}}></td>
-              <td><a href="http://www.meilishuo.com/share/item/{{content[0]['point'][0]}}">{{content[0]['point'][0]}}</a></td>
+              <td><img src="http://imgst.meilishuo.net{{content[0]['point'][4]}}" width="226" height="300" /></td>
+              <td>{{content[0]['dis']}}</td>
+              <td><a href="http://www.meilishuo.com/share/item/{{content[0]['point'][0]}}" target="_blank">{{content[0]['point'][0]}}</a></td>
               <td>{{content[0]['point'][1]}}</td>
-              <td><a href="http://www.meilishuo.com/shop/{{content[0]['point'][2]}}">{{content[0]['point'][2]}}</a></td>
+              <td><a href="http://www.meilishuo.com/shop/{{content[0]['point'][2]}}" target="_blank">{{content[0]['point'][2]}}</a></td>
               <td>{{content[0]['point'][3]}}</td>              
             </tr>
             <tr>
               <td>每日图片库</td>
-              <td><img src="http://imgst.meilishuo.net{{content[1]['point'][4]}}" /></td>
-              <td>{{content[1]['dis']}}></td>
-              <td><a href="http://www.meilishuo.com/share/item/{{content[1]['point'][0]}}">{{content[1]['point'][0]}}</a></td>
+              <td><img src="http://imgst.meilishuo.net{{content[1]['point'][4]}}" width="226" height="300" /></td>
+              <td>{{content[1]['dis']}}</td>
+              <td><a href="http://www.meilishuo.com/share/item/{{content[1]['point'][0]}}" target="_blank">{{content[1]['point'][0]}}</a></td>
               <td>{{content[1]['point'][1]}}</td>
-              <td><a href="http://www.meilishuo.com/shop/{{content[1]['point'][2]}}">{{content[1]['point'][2]}}</a></td>
+              <td><a href="http://www.meilishuo.com/shop/{{content[1]['point'][2]}}" target="_blank">{{content[1]['point'][2]}}</a></td>
               <td>{{content[1]['point'][3]}}</td>              
             </tr>
             <tr>
               <td>当前图片库</td>
-              <td><img src="http://imgst.meilishuo.net{{content[2]['point'][4]}}" /></td>
-              <td>{{content[2]['dis']}}></td>
-              <td><a href="http://www.meilishuo.com/share/item/{{content[2]['point'][0]}}">{{content[2]['point'][0]}}</a></td>
+              <td><img src="http://imgst.meilishuo.net{{content[2]['point'][4]}}" width="226" height="300" /></td>
+              <td>{{content[2]['dis']}}</td>
+              <td><a href="http://www.meilishuo.com/share/item/{{content[2]['point'][0]}}" target="_blank">{{content[2]['point'][0]}}</a></td>
               <td>{{content[2]['point'][1]}}</td>
-              <td><a href="http://www.meilishuo.com/shop/{{content[2]['point'][2]}}">{{content[2]['point'][2]}}</a></td>
+              <td><a href="http://www.meilishuo.com/shop/{{content[2]['point'][2]}}" target="_blank">{{content[2]['point'][2]}}</a></td>
               <td>{{content[2]['point'][3]}}</td>              
             </tr>
           </tbody>
