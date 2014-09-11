@@ -469,16 +469,19 @@ class ResultPageHandler(tornado.web.RequestHandler):
         # 为了debug，放宽相似性阈值
         SIMPLE_THRESHOLD = 1
 
-        category = self.get_argument('category')
-        img_url = self.get_argument('imgurl')
+        # 图片下载和leveldb取缓存的编码都是ascii，先做转码 
+        category = self.get_argument('category').encode('ascii')
+        img_url = self.get_argument('imgurl').encode('ascii')
+    
+        # import pdb
+        # pdb.set_trace()
+
         img_url_short = img_url
         if img_url.startswith('http://'):
             # 去掉 http的网站前缀，方便复用后面的函数
-            img_url_short = img_url[7:].split("/", 1)[1]
-
+            img_url_short = '/' + img_url[7:].split("/", 1)[1]
 
         twitter_info_raw = TwitterInfo()
-        # line = map(lambda x: x.encode('ascii'), (req['twitter_id'], req.get('goods_id', '-1'), req.get('shop_id', '-1'), req['category'], req['img_url']))
         line = ('-1', '-1', '-1', category, img_url_short)
         twitter_info_raw.append(line)
 
@@ -486,7 +489,7 @@ class ResultPageHandler(tornado.web.RequestHandler):
 
         # 无法获取有效图片特征
         if result_set:
-            self.render("debug.html", url_no_feature=img_url)
+            self.render("debug.html", url_no_feature=img_url, content=None)
             return
 
         feature_data_categories, twitter_info_categories = split_feature_into_categories(feature_data, twitter_info)
@@ -502,7 +505,7 @@ class ResultPageHandler(tornado.web.RequestHandler):
             with Timer() as t:
                 nn, distance = self._index_base.search(c_name, feature_data, neighbors=1)
                 twitter_data_index = self._index_base.get_twitter_info(c_name).get_data()
-                if nn:
+                if nn.any():
                     search_results.append({'point': twitter_data_index[nn[0]], 'dis': distance[0]})
                 else:
                     search_results.append({'point':None, 'dis':None})
@@ -511,21 +514,21 @@ class ResultPageHandler(tornado.web.RequestHandler):
             with Timer() as t:
                 nn, distance = self._index_daily.search(c_name, feature_data, neighbors=1)
                 twitter_data_index = self._index_daily.get_twitter_info(c_name).get_data()
-                if nn:
+                if nn.any():
                     search_results.append({'point': twitter_data_index[nn[0]], 'dis': distance[0]})
                 else:
                     search_results.append({'point':None, 'dis':None})
 
             # 查询realtime库
             with Timer() as t:
-                nn, distance = self._index_rt.search(c_name, feature_data3, neighbors=NEIGHBOR_NUM)
+                nn, distance = self._index_rt.search(c_name, feature_data, neighbors=1)
                 twitter_data_index = self._index_rt.get_twitter_info(c_name).get_data()
-                if nn:
+                if nn.any():
                     search_results.append({'point': twitter_data_index[nn[0]], 'dis': distance[0]})
                 else:
                     search_results.append({'point':None, 'dis':None})
 
-        self.render('debug.html', content=json.dumps(search_results))
+        self.render('debug.html', url_no_feature=None, content=json.dumps(search_results))
         return
 
 
