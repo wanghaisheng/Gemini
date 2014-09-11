@@ -31,7 +31,7 @@ LOG_LEVEL = logging.DEBUG
 WORK_BASE_PATH = conf['WORK_BASE_PATH']
 LOG_FILE = WORK_BASE_PATH + '/log/fetch_verify_wait_in_mysql.log'
 
-SAME_SERVER = "http://localhost:8773/result"
+SAME_SERVER = "http://localhost:8081/result"
 
 logger = setup_logger('DB', LOG_FILE, LOG_LEVEL)
 
